@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: AuthUnix.pm,v 1.1 2005/01/28 08:40:41 eserte Exp $
+# $Id: AuthUnix.pm,v 1.2 2005/02/03 00:06:28 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2005 Slaven Rezic. All rights reserved.
@@ -16,7 +16,7 @@ package WE::DB::ComplexUser::AuthUnix;
 
 use strict;
 use vars qw($VERSION $DEBUG);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.1 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
 
 use mixin::with 'WE::DB::ComplexUser';
 
@@ -45,3 +45,28 @@ sub identify_Unix {
 1;
 
 __END__
+
+=head1 NAME
+
+WE::DB::ComplexUser::AuthUnix - ComplexUser database authentication via unix passwd
+
+=head1 DESCRIPTION
+
+Use normal Unix passwd authentication to authenticate the user
+against. The user object could define the additional member
+C<Auth_Unix_User> to define the Unix user (the user object Username is
+used if C<Auth_Unix_User> is undefined).
+
+B<NOTE>: Most modern Unices (e.g. Linux, *BSD) have "shadow" files
+which hold the passwords and which are only accessible for root. This
+means this module is most cases only works if running as root.
+
+=head1 AUTHOR
+
+Slaven Rezic
+
+=head1 SEE ALSO
+
+L<WE::DB::ComplexUser>.
+
+=cut

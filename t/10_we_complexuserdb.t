@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: 10_we_complexuserdb.t,v 1.13 2005/01/23 01:43:50 eserte Exp $
+# $Id: 10_we_complexuserdb.t,v 1.14 2005/02/16 22:46:09 eserte Exp $
 # Author: Olaf Mätzner, Slaven Rezic
 #
 
@@ -25,7 +25,7 @@ BEGIN {
     }
 }
 
-BEGIN { plan tests => 2 + (43+7+22+3+2)*4 + 3*2 + 6 }
+BEGIN { plan tests => 2 + (43+7+22+3+8)*4 + 3*2 + 6 }
 
 my $testdir = "$FindBin::RealBin/test";
 mkdir $testdir, 0770;
@@ -47,17 +47,17 @@ foreach my $connect (0, 1) {
 
 	is($u->CryptMode, $crypt_mode);
 	#3 neuer user angelegt
-	is($u->add_user("gerhardschroeder","bla"),1);
+	is($u->add_user("gerhardschroeder","bla"), $u->ERROR_OK);
 	# neuer user angelegt
-	is($u->add_user("ole","bla","Olaf Mätzner"),1);
+	is($u->add_user("ole","bla","Olaf Mätzner"), $u->ERROR_OK);
 	# user nicht angelegt, gibt es schon
-	is($u->add_user("ole","bla"),0);
+	is($u->add_user("ole","bla"), $u->ERROR_USER_EXISTS);
 	# user wird angelegt, Hash macht nichts
-	is($u->add_user("ole#maetzner","bla"),1);
+	is($u->add_user("ole#maetzner","bla"), $u->ERROR_OK);
 	#7 entsprechende Fehlermeldung:
 	is($u->error($u->add_user("ole#maetzner2","bla")),"ok");
 
-	is($u->add_user("eserte","bla"),1);
+	is($u->add_user("eserte","bla"), $u->ERROR_OK);
 
 	{
 	    my $uo = $u->get_user_object("gerhardschroeder");
@@ -79,12 +79,12 @@ foreach my $connect (0, 1) {
 	    like($@, qr/empty/);
 	    $user_object->{Username} = "gerhardschroeder";
 	    is($user_object->name, "gerhardschroeder");
-	    is($u->add_user_object($user_object), 0);
+	    is($u->add_user_object($user_object), $u->ERROR_USER_EXISTS);
 	    $user_object->Username("angelamerkel");
 	    $user_object->Realname("Angela Merkel");
 	    $user_object->Password("geheim");
 	    $user_object->Groups(["cdu"]);
-	    is($u->add_user_object($user_object), 1);
+	    is($u->add_user_object($user_object), $u->ERROR_OK);
 	    is($u->user_exists("angelamerkel"), 1);
 
 	    {
@@ -107,9 +107,9 @@ foreach my $connect (0, 1) {
 	is($u->get_fullname("xoxle"),0);
 
 	#11 falsches password
-	is($u->identify("ole","blubber"),0);
+	is($u->identify("ole","blubber"), $u->ERROR_NOT_ACCEPTED);
 	# richtiges password
-	is($u->identify("ole","bla"),1);
+	is($u->identify("ole","bla"), $u->ERROR_OK);
 
     SKIP: {
 	    skip("for crypt_mode $crypt_mode", 1)
@@ -159,23 +159,43 @@ foreach my $connect (0, 1) {
 	is(scalar keys %all_users, 5)
 	    or diag "Got: " . join(", ", keys %all_users);
 
+	############################################################
+	$u->ErrorType($u->ERROR_TYPE_DIE);
 	$@ = "";
 	eval {
 	    $u->add_user("_invalid", "bla");
 	};
-	like($@, qr/not allowed/);
+	like($@, qr/not allowed/, "_ with die");
 
+	$u->ErrorType($u->ERROR_TYPE_RETURN);
+	is($u->add_user("_invalid", "bla"), $u->ERROR_INVALID_CHAR);
+	like($u->ErrorMsg, qr/starting.*not allowed/, "_ with return");
+
+	############################################################
+	$u->ErrorType($u->ERROR_TYPE_DIE);
 	$@ = "";
 	eval {
 	    $u->add_user("inva:lid", "bla");
 	};
-	like($@ , qr/invalid char/i);
+	like($@ , qr/invalid char/i, "Invalid char with die");
 
+	$u->ErrorType($u->ERROR_TYPE_RETURN);
+	is($u->add_user("inva:lid", "bla"), $u->ERROR_INVALID_CHAR);
+	like($u->ErrorMsg, qr/invalid char/i, "Invalid char with return");
+
+	############################################################
+	$u->ErrorType($u->ERROR_TYPE_DIE);
 	$@ = "";
 	eval {
 	    $u->add_group("gerhardschroeder", "inva:lid");
 	};
-	like($@, qr/invalid char/i);
+	like($@, qr/invalid char/i, "Invalid group char with die");
+
+	$u->ErrorType($u->ERROR_TYPE_RETURN);
+	is($u->add_group("gerhardschroeder", "inva:lid"), $u->ERROR_INVALID_CHAR);
+	like($u->ErrorMsg, qr/invalid char/i, "Invalid group char with return");
+
+	$u->ErrorType($u->ERROR_TYPE_DIE);
 
 	my $userobj = $u->get_user_object("gerhardschroeder");
 	$userobj->{Stellung} = "Kanzler";
@@ -291,7 +311,7 @@ foreach my $crypt_mode ('crypt', 'none') {
     unlink $pwfile;
     my $u1 = WE::DB::ComplexUser->new(undef, $pwfile, -connect => 0);
     my $u2 = WE::DB::ComplexUser->new(undef, $pwfile, -connect => 0);
-    is($u1->add_user("neilyoung","bla"),1);
+    is($u1->add_user("neilyoung","bla"), $u1->ERROR_OK);
     is($u1->user_exists("neilyoung"),1);
     is($u2->user_exists("neilyoung"),1);
     is($u2->delete_user("neilyoung"),1);

@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: WE_Navigation.pm,v 1.10 2004/06/17 08:58:44 eserte Exp $
+# $Id: WE_Navigation.pm,v 1.11 2005/03/02 12:20:01 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2002 Online Office Berlin. All rights reserved.
@@ -19,7 +19,7 @@ use base qw(WE_Frontend::Plugin::Navigation);
 
 use strict;
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
 
 require WE_Frontend::Plugin::WE_Navigation::Object;
 
@@ -117,6 +117,15 @@ C<WE_Frontend::Plugin::WE_Navigation>:
 This could be put into a file called
 C<WE_Sample/Plugin/MyNavigation.pm>. Now you can override methods in
 the C<WE_Sample::Plugin::MyNavigation::Object> class.
+
+=head1 EXAMPLE USAGE IN TEMPLATES
+
+To get the modification time of the current page:
+
+    [% USE n = WE_Navigation -%]
+    Modified time: [% n.self.o.TimeModified %]
+
+Note that "self.o" return a L<WE::Obj> object.
 
 =head1 AUTHOR
 

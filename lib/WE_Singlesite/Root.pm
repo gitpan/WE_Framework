@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Root.pm,v 1.23 2005/01/28 08:44:07 eserte Exp $
+# $Id: Root.pm,v 1.24 2005/02/03 00:06:30 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2001 Online Office Berlin. All rights reserved.
@@ -40,6 +40,9 @@ The root directory for all databases.
 
 =head1 OVERRIDEABLE METHODS
 
+To change the default classes for the subdatabases, override the
+following methods to return another class string:
+
 =over 4
 
 =item ObjDBClass
@@ -62,6 +65,13 @@ By default L<WE::DB::OnlineUser>
 
 By default L<WE::DB::Name>
 
+=back
+
+To change the default file names for the subdatabases, override the
+following methods to return another filename (just the basename):
+
+=over
+
 =item ObjDBFile
 
 By default F<objdb.db>
@@ -81,6 +91,14 @@ By default F<onlinedb.db>
 =item NameDBFile
 
 By default F<name.db>
+
+=back
+
+To change other aspects of the subdatabases, change the following
+methods (B<WARNING>: The semantics of the following two may
+change!!!):
+
+=over
 
 =item SerializerClass
 
@@ -106,7 +124,7 @@ __PACKAGE__->mk_accessors(qw/RootDir/);
 
 use strict;
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.23 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.24 $ =~ /(\d+)\.(\d+)/);
 
 sub new {
     my($class, %args) = @_;

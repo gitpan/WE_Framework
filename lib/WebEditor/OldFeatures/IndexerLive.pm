@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: IndexerLive.pm,v 1.1 2004/04/16 23:27:25 eserte Exp $
+# $Id: IndexerLive.pm,v 1.3 2005/03/13 17:33:31 cmuellermeta Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2004 Slaven Rezic. All rights reserved.
@@ -16,18 +16,31 @@ package WebEditor::OldFeatures::IndexerLive;
 
 use strict;
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.1 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
 
 use mixin::with "WebEditor::OldController";
 
 sub run_live_indexer {
+    require File::Basename;
+    require File::Spec;
     my $self = shift;
     my $c = $self->C;
-    my @cmd = (qw(ssh -l) , $c->staging->user,
-	       $c->staging->host,
-	       File::Spec->catfile(File::Basename::dirname($c->staging->directory),
+    my $liveuser=$c->staging->user;
+
+    my @cmd;
+    
+    unless ("$liveuser"){
+	    print "creating Live Index for localhost...<br>\n";
+	    @cmd = (File::Spec->catfile(File::Basename::dirname($c->staging->directory), "etc", "run_indexer"));
+   
+    }else{
+	   print "creating Live Index for remote host...<br>\n";
+    	   my @cmd = (qw(ssh -l) , $c->staging->user,
+	   $c->staging->host,
+	   File::Spec->catfile(File::Basename::dirname($c->staging->directory),
 				   "etc", "run_indexer"),
-	      );
+	   );
+}
     print "<pre>";
     print "Run: @cmd\n";
     system(@cmd);

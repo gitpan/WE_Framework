@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: JS.pm,v 1.7 2004/12/12 11:40:44 eserte Exp $
+# $Id: JS.pm,v 1.8 2005/02/03 00:06:29 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2002,2004 Slaven Rezic. All rights reserved.
@@ -16,7 +16,7 @@ package WE_Frontend::Plugin::JS;
 
 use strict;
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
 
 use base qw(Template::Plugin);
 
@@ -146,7 +146,7 @@ In a template:
 This package contains to filters to make supplied variables safe for
 inclusion as a javascript string. The two available filters are
 B<js_q>, which escapes special characters with backslashes, and
-B<js_escape>, which creates a UTI-escaped string which has to be
+B<js_escape>, which creates a UTF8-escaped string which has to be
 unescaped with javascript's B<unescape> function.
 
 =head1 AUTHOR

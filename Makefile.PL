@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: Makefile.PL,v 1.50 2004/12/21 23:17:29 eserte Exp $
+# $Id: Makefile.PL,v 1.55 2005/02/21 21:04:05 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2001 Onlineoffice. All rights reserved.
@@ -11,6 +11,7 @@
 # terms of the GNU General Public License, see the file COPYING.
 #
 
+use vars qw(%mod_config %prereq_pm);
 BEGIN {
 %mod_config =
     (
@@ -156,7 +157,7 @@ if (0) {
 WriteMakefile
   (
    'NAME'	   => 'WE_Framework',
-   'VERSION'       => '0.096_01',
+   'VERSION'       => '0.097_01',
    'EXE_FILES'     => [qw|
 		          scripts/we_content_upgrade
 		          scripts/we_create_folder_tree
@@ -179,6 +180,7 @@ WriteMakefile
 #
    'dist' => {'POSTOP'=>'-$(CHMOD) 664 $(DISTVNAME).tar$(SUFFIX)'},
 
+   'ABSTRACT'      => 'The web.editor backend',
 #   'ABSTRACT_FROM' => 'doc/WE_Framework_Intro.pod',
    'AUTHOR'        => 'Slaven Rezic (slaven@rezic.de)',
   );
@@ -318,11 +320,20 @@ EOF
 ######################################################################
 # Release
 
-release:
+release:	release-sf release-cpan
+
+release-sf:
 	$sf_upload -pr we-framework -p we-framework -f \$(DISTVNAME).tar\$(SUFFIX)
 
 rsync-sf-doc:
 	rsync -e ssh -Pvzr blib/html/ eserte\@bbbike.sourceforge.net:/home/groups/w/we/we-framework/htdocs/doc/
+
+release-cpan:
+	if [ ! -e \$(DISTVNAME).tar\$(SUFFIX) ] ; then \\
+	    echo Please build \$(DISTVNAME).tar\$(SUFFIX) ; \\
+	    false ; \\
+	fi
+	cpan-upload \$(DISTVNAME).tar\$(SUFFIX)
 
 .PHONY: ChangeLog
 

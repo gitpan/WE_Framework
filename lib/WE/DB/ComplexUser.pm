@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: ComplexUser.pm,v 2.16 2005/01/28 08:43:47 eserte Exp $
+# $Id: ComplexUser.pm,v 2.20 2005/02/16 22:45:49 eserte Exp $
 # Author: Olaf Mätzner, Slaven Rezic
 #
 # Copyright (C) 2001 Online Office Berlin. All rights reserved.
@@ -18,11 +18,11 @@ package WE::DB::ComplexUser;
 
 use base qw(WE::DB::Base WE::DB::User Class::Accessor);
 __PACKAGE__->mk_accessors(qw(DB CryptMode InvalidChars InvalidGroupChars
-			     DBFile DBTieArgs));
+			     DBFile DBTieArgs ErrorType ErrorMsg));
 
 use strict;
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%02d", q$Revision: 2.16 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 2.20 $ =~ /(\d+)\.(\d+)/);
 
 use MLDBM;
 use Fcntl;
@@ -44,6 +44,7 @@ use Fcntl;
 {
     package WE::UserObj;
     use base qw(WE::EntityObj);
+    # AuthType should be "" or "userdb" for using local passwords
     __PACKAGE__->mk_accessors
 	(qw(Username Password Realname Groups Roles Email
 	    Homedirectory Shell Language AuthType));
@@ -79,6 +80,9 @@ use constant ERROR_USER_EXISTS  => 4;
 
 use constant NEXT_ID_KEY => "__NEXT_ID__";
 use constant GROUPS_KEY  => "__GROUPS__";
+
+use constant ERROR_TYPE_DIE    => 0;
+use constant ERROR_TYPE_RETURN => 1;
 
 sub new {
     my($class, $root, $file, %args) = @_;
@@ -124,6 +128,7 @@ sub new {
 
     $self->Root($root);
     $self->Connected(0);
+    $self->ErrorType(ERROR_TYPE_DIE);
 
     $self->connect_if_necessary(sub {
         # read database information
@@ -193,7 +198,7 @@ sub identify_object {
 	    $u = $self->get_user_object($user);
 	    my $authtype = $u->AuthType;
 	TRY_AUTH: {
-		if ($authtype) {
+		if ($authtype && $authtype ne "userdb") {
 		    my $method = "identify_${authtype}";
 		    my $code = qq{use mixin 'WE::DB::ComplexUser::Auth${authtype}'; \$self->can('${method}');} ;
 		    if (!eval $code) {
@@ -241,15 +246,28 @@ sub add_user {
     my($self, $user, $password, $fullname) = @_;
     $self->connect_if_necessary(sub {
     	if ( $self->user_exists($user) ) {
-    	    return ERROR_NOT_ACCEPTED;
+	    $self->ErrorMsg("User <$user> exists already");
+    	    return ERROR_USER_EXISTS;
     	}
     	if ( $user =~ /^_/) {
-    	    die "Usernames starting with `_' are not allowed";
+	    my $msg = "Usernames starting with `_' are not allowed";
+	    if ($self->ErrorType eq ERROR_TYPE_RETURN) {
+		$self->ErrorMsg($msg);
+		return ERROR_INVALID_CHAR;
+	    } else {
+		die $msg;
+	    }
     	}
     	if ( $self->InvalidChars ne '' ) {
     	    my $rcrx = "[" . quotemeta($self->InvalidChars) . "]";
     	    if ($user =~ /$rcrx/) {
-    		die "Invalid characters (some of @{[ $self->InvalidChars ]} in user name";
+		my $msg = "Invalid characters (some of @{[ $self->InvalidChars ]} in user name";
+		if ($self->ErrorType eq ERROR_TYPE_RETURN) {
+		    $self->ErrorMsg($msg);
+		    return ERROR_INVALID_CHAR;
+		} else {
+		    die $msg;
+		}
     	    }
     	}
     	my $o = $self->UserObjClass->new;
@@ -404,7 +422,13 @@ sub add_group {
     if ( $self->InvalidGroupChars ne '' ) {
 	my $rcrx = "[" . quotemeta($self->InvalidGroupChars) . "]";
 	if ($group =~ /$rcrx/) {
-	    die "Invalid characters (some of @{[ $self->InvalidGroupChars ]} in group name";
+	    my $msg = "Invalid characters (some of @{[ $self->InvalidGroupChars ]} in group name";
+	    if ($self->ErrorType eq ERROR_TYPE_RETURN) {
+		$self->ErrorMsg($msg);
+		return ERROR_INVALID_CHAR;
+	    } else {
+		die $msg;
+	    }
 	}
     }
 
@@ -704,11 +728,18 @@ WE::DB::ComplexUser - Webeditor user database.
 =head1 DESCRIPTION
 
 Object for administration of webeditor-users. You can add, delete,
-identify, modify users.
+identify, modify users. This is an MLDBM implementation of the
+L<WE::DB::User> module.
 
-This is an MLDBM implementation of the L<WE::DB::User> module. The
-user elements are C<WE::UserObj> (this may be changed by override the
-UserObjClass method) objects with the following members:
+B<NOTE> Due to histerical reasons, the returned value of most methods
+is not a boolean value as one would expect. Rather the C<ERROR_*>
+constants should be used instead, see L</CONSTANTS>.
+
+=head2 User objects
+
+The user elements are objects of the class C<WE::UserObj> (this may be
+changed by overriding the UserObjClass method) objects with the
+following members:
 
 =over 4
 
@@ -751,7 +782,45 @@ The shell of the user. This may be the classical UNIX shell.
 The preferred language of the user. This should be a string or an
 array of languages.
 
+=item AuthType
+
+The authentication type of the user. The default (undef, empty string
+or "userdb") means to use the Password entry of the ComplexUser
+database. For other values an external module is consulted, which is
+named C<WE::DB::ComplexUser::AuthI<authtype>>. See
+L<WE::DB::ComplexUser::AuthPOP3> and L<WE::DB::ComplexUser::AuthUnix>.
+
+=item Id
+
+An automatically increased identifier, which is set when adding the
+object to the database. Note that the Username is used to identify an
+user object, not the Id.
+
 =back
+
+=head2 Group objects
+
+There's also elements of the class C<WE::GroupObj> for group objects.
+The group objects have the following members:
+
+=over
+
+=item Groupname
+
+The full name of the group
+
+=item Description
+
+A description of the group's purpose
+
+=item Id
+
+An Id, see the WE::UserObj description for Id.
+
+=back
+
+Note that accessing C<WE::GroupObj> objects is not very efficient,
+especially for databases with a large group number.
 
 =head2 CONSTRUCTOR
 
@@ -785,15 +854,15 @@ Do not crypt passwords.
 This is deprecated, use L<< /$udb->add_user_object >> instead.
 
 Add a user with the specified I<$username>, I$<password> and
-I<$fullrealname>. Return 1 (ERROR_OK) if creation of user was
-successful. Die on errors (e.g. if invalid characters or an invalid
-username is used).
+I<$fullrealname>. Return ERROR_OK if creation of user was successful.
+Die on errors (e.g. if invalid characters or an invalid username is
+used).
 
 =item $udb->add_user_object($o)
 
-Add a user with the specified C<WE::UserObj> object. Return 1
-(ERROR_OK) if creation of user by object was successful. See L<<
-/$udb->add_user >> for exceptions.
+Add a user with the specified C<WE::UserObj> object. Return ERROR_OK
+if creation of user by object was successful. See L<< /$udb->add_user
+>> for exceptions.
 
 =item $udb->get_fullname($username)
 
@@ -815,7 +884,7 @@ Return 1 if the specified I<$username> exists.
 
 =item $udb->delete_user($username)
 
-Delete the specified I<$username>. Return 1 (ERROR_OK) if successful.
+Delete the specified I<$username>. Return ERROR_OK if successful.
 
 =item $udb->is_in_group($username,$group)
 
@@ -829,9 +898,9 @@ Return 1 if I<$username> is in the named I<$group>.
 
 =item $udb->add_group($username,$group)
 
-Add the given I<$group> to the I<$username>. Return 1 (ERROR_OK) if
-adding group to user was successful. Note: there's no check if the
-named group really exists. Die if invalid characters are used.
+Add the given I<$group> to the I<$username>. Return ERROR_OK if adding
+group to user was successful. Note: there's no check if the named
+group really exists. Die if invalid characters are used.
 
 =item $udb->set_groups($username, @groups)
 
@@ -841,7 +910,7 @@ characters are used.
 =item $udb->delete_group($username,$group)
 
 Delete the given I<$group> from the I<$username>'s group list. Return
-1 (ERROR_OK) if deleting group was successful.
+ERROR_OK if deleting group was successful.
 
 =item $udb->get_users_of_group($group)
 
@@ -899,6 +968,25 @@ mode of the user database, this will be encrypted or unencrypted. Does
 not save the I<$userobj> into the database. Use this method instead of
 setting the I<Password> member in the I<$userobj> directly.
 
+=item $udb->ErrorType([$error_type])
+
+Set how errors are handled:
+
+=over
+
+=item ERROR_TYPE_DIE
+
+If errors are encountered, the method will die. This is the default.
+
+=item ERROR_TYPE_RETURN
+
+If errors are encountered, the method will return with an error code.
+The error message can be fetched by C<< $udb->ErrorMsg >>.
+
+=back
+
+Without argument return the current value.
+
 =back
 
 =head2 CONSTANTS
@@ -919,6 +1007,12 @@ methods:
 =item * ERROR_USER_EXISTS
 
 =back
+
+=head1 HISTORY
+
+An incompatible change occurred around 2005-02-16 (between version
+2.19 and 2.20): adding an existing user used to return "0", but now it
+returns C<ERROR_USER_EXISTS>.
 
 =head1 AUTHORS
 

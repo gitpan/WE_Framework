@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Export.pm,v 1.9 2005/01/10 08:28:56 eserte Exp $
+# $Id: Export.pm,v 1.10 2005/02/16 23:59:10 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2001 Online Office Berlin. All rights reserved.
@@ -23,7 +23,7 @@ __PACKAGE__->mk_accessors(qw/Root Tmpdir Archive Verbose Force
 
 use strict;
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
 
 use WE::Util::Functions qw(_save_pwd is_in_path file_name_is_absolute);
 
@@ -192,8 +192,10 @@ sub export_content {
     my $directory = $contentdb->Directory;
 
     my $contentdir = $self->Tmpdir . "/content";
-    mkdir $contentdir, 0755
-	or die "Can't create $contentdir: $!";
+    mkdir $contentdir, 0755;
+    if (!-d $contentdir) {
+	die "Can't create $contentdir: $!";
+    }
 
     my @directories;
     my @files;
@@ -244,11 +246,16 @@ file, the temporary directory will be deleted completely.
 =cut
 
 sub export_all {
-    my $self = shift;
+    my($self, %args) = @_;
 
     my @l = localtime;
     my $timestamp = sprintf "%04d%02d%02d-%02d%02d%02d",
 	                    $l[5]+1900,$l[4],@l[3,2,1,0];
+
+    if (defined $args{-destdir}) {
+	$self->Tmpdir($args{-destdir});
+	mkpath $args{-destdir};
+    }
 
     if (!defined $self->Tmpdir) {
 	my $tmpdir = _tmpdir() . "/we_export.$timestamp";
@@ -265,9 +272,15 @@ sub export_all {
 	die "The directory " . $self->Tmpdir . " does not exist or is not readable";
     }
 
-    $self->export_db;
-    $self->export_content;
-    $self->create_mtree;
+    $self->export_db       unless $args{-onlycontent};
+    $self->export_content  unless $args{-onlydb};
+    $self->create_mtree    unless $args{-onlycontent} || $args{-onlydb};
+
+    return 1 if defined $args{-destdir};
+
+    if (defined $args{-destfile}) {
+	$self->Archive($args{-destfile});
+    }
 
     if (!defined $self->Archive) {
 	$self->Archive(_tmpdir() . "/we_export.$timestamp.tar.gz");

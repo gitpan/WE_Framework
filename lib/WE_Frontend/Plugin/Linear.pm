@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Linear.pm,v 1.6 2004/01/28 16:45:24 eserte Exp $
+# $Id: Linear.pm,v 1.7 2005/02/03 00:06:29 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2003 Slaven Rezic.
@@ -22,7 +22,7 @@ use WE_Frontend::Plugin::WE_Navigation;
 
 use strict;
 use vars qw($VERSION $DEBUG);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
 
 =head1 NAME
 
@@ -175,7 +175,7 @@ Or for just creating a (multilingual) "next page" link:
   [% IF next -%]<a class="navi" href="[% next.relurl %]"><img src="[% rooturl %]/images/arrow.gif" border="0"><noindex><!--htdig_noindex--> [% IF lang == "de" %]N&auml;chste Seite[% ELSE %]Next page[% END %]: [% next.lang_title | html %]<!--/htdig_noindex--></noindex></a>[% END -%]
 
 Note the presence of the noindex tags --- these help htdig to ignore
-the contentfor the excerpts.
+the Next/Prev link text for the excerpts.
 
 =head1 AUTHOR
 

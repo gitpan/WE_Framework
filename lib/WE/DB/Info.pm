@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Info.pm,v 1.1 2005/01/31 22:29:41 eserte Exp $
+# $Id: Info.pm,v 1.4 2005/02/02 20:43:45 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2005 Slaven Rezic. All rights reserved.
@@ -16,7 +16,7 @@ package WE::DB::Info;
 
 use strict;
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.1 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
 
 use base qw(Class::Accessor);
 __PACKAGE__->mk_accessors(qw(Info File));
@@ -40,7 +40,9 @@ sub new {
 
 sub load {
     my $self = shift;
-    $self->Info(YAML::LoadFile($self->File));
+    local $^W = undef;
+    my $info = eval { YAML::LoadFile($self->File) } || {};
+    $self->Info($info);
 }
 
 sub getopt {

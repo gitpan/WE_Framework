@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: 00_we_framework.t,v 1.15 2005/01/30 08:29:31 eserte Exp $
+# $Id: 00_we_framework.t,v 1.16 2005/02/02 22:13:06 eserte Exp $
 # Author: Slaven Rezic
 #
 
@@ -96,6 +96,7 @@ for my $mod (@mods) {
 	skip "YAML not available, needed for $mod", $tests_per_loop
 	    if $mod =~ /^( WE::DB::FS
                          | WE_Content::YAML
+			 | WE::DB::Info
                          )$/x && !eval { require YAML };
 	skip "Tie::IxHash not available, needed for $mod", $tests_per_loop
 	    if $mod eq 'WE_Content::IxHash' && !eval { require Tie::IxHash };
@@ -115,6 +116,7 @@ for my $mod (@mods) {
 			 | WebEditor::OldFeatures::MakeOnePageHTML$
 			 | WebEditor::OldFeatures::MakePDF$
                          | WebEditor::SystemExplorer$
+			 | WebEditor::OldFeatures::HTMLFilterHack$
                          )/x && !eval { require Template };
 	skip "Mail::Send not available, needed for $mod", $tests_per_loop
 	    if $mod eq 'WebEditor::OldFeatures::Notify' && !eval { require Mail::Send };
@@ -147,6 +149,10 @@ for my $script (@scripts) {
 	my $base = basename $script;
 	skip "XML::DOM not available", $tests_per_script_loop
 	    if $base eq 'we_import_hwx' && !eval { require XML::DOM };
+	skip "YAML not available", $tests_per_script_loop
+	    if $base =~ /^(we_dump|we_user)$/ && !eval { require YAML };
+	skip "Term::ReadKey", $tests_per_script_loop
+	    if $base eq 'we_shell' && !eval { require YAML };
 
 	my $cmd = "$^X -c $script > " . devnull . " 2>&1";
 	#warn $cmd;

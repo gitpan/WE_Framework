@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: DB.pm,v 1.13 2005/01/28 08:42:05 eserte Exp $
+# $Id: DB.pm,v 1.14 2005/02/03 00:06:26 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2001 Online Office Berlin. All rights reserved.
@@ -28,7 +28,7 @@ WE::DB - root of web editor database collection
 
 Instantiate a new root for a web.editor database. This class will
 usually be overwritten by a class doing the dirt work of opening the
-sub-databases.
+sub-databases. See L<WE_Singlesite::Root> for an example.
 
 =cut
 
@@ -36,7 +36,7 @@ use base qw(Class::Accessor);
 
 use strict;
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.14 $ =~ /(\d+)\.(\d+)/);
 
 use vars qw(@DBs);
 @DBs = qw(UserDB ObjDB ContentDB LinkDB OnlineUserDB NameDB);

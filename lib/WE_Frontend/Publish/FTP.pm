@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: FTP.pm,v 1.5 2004/06/10 13:18:02 eserte Exp $
+# $Id: FTP.pm,v 1.7 2005/02/18 14:03:39 cmuellermeta Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2001,2002 Online Office Berlin. All rights reserved.
@@ -16,7 +16,7 @@
 package WE_Frontend::Publish::FTP;
 
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
 
 package WE_Frontend::Main;
 
@@ -85,8 +85,9 @@ FTP remote directory:     $livedirectory
 EOF
     }
 
-    my $ftp = Net::FTP->new($livehost, Debug => 0) or die $@;
+    my $ftp = Net::FTP->new($livehost, Debug => 0) or die "Can't open FTP connection to $livehost: $@";
     $ftp->login($liveuser, $livepassword) or die "Can't login with $liveuser";
+    $ftp->pasv();
     $ftp->binary();
     if (defined $livedirectory && $livedirectory ne '') {
 	$ftp->cwd($livedirectory) or die "Can't remote chdir to $livedirectory";
@@ -97,7 +98,7 @@ EOF
     my @files       = @{ $ret->{Files}       };
 
     _save_pwd {
-	chdir $pubhtmldir || die $!;
+	chdir $pubhtmldir || die "Can't change directory to $pubhtmldir: $!";
 
 	foreach my $dir (@directories) {
 	    if ($v) { print "Create folder $dir\n" }

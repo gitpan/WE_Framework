@@ -2,7 +2,7 @@ package WE_Frontend::Info;
 
 use strict;
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.32 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.33 $ =~ /(\d+)\.(\d+)/);
 
 ######################################################################
 package WEsiteinfo::Paths;
@@ -104,7 +104,7 @@ package WEsiteinfo::Staging;
 use base qw(Class::Accessor);
 __PACKAGE__->mk_accessors(qw(transport user password host directory
 			     cgidirectory tempdirectory temp2directory
-			     stagingext rsakey archivefile));
+			     stagingext rsakey archivefile message));
 sub new { bless {}, shift }
 
 # Provide sensible defaults

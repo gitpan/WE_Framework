@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: we_db_export,v 1.7 2004/08/29 21:17:22 eserte Exp $
+# $Id: we_db_export,v 1.8 2005/02/16 23:59:20 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2001 Online Office Berlin. All rights reserved.
@@ -21,19 +21,35 @@ use strict;
 
 my $class = "WE_Singlesite::Root";
 my $rootdir;
-my $only_content; # XXX ausprogrammieren
+my $only_content;
 my $only_db;
+my $destdir;
+my $destfile;
+my $versioning;
+my $v = 1;
 
 if (!GetOptions("class=s" => \$class,
 		"rootdir=s" => \$rootdir,
 		"content!" => \$only_content,
 		"db!"      => \$only_db,
+		"destdir=s" => \$destdir,
+		"destfile=s" => \$destfile,
+		"versioning!" => \$versioning,
+		"q" => sub { $v = 0 },
 	       )) {
     usage("Wrong command line option");
 }
 
 if (!defined $rootdir) {
     usage("-rootdir is missing but mandatory");
+}
+
+if (defined $destdir && defined $destfile) {
+    die "-destdir and -destfile cannot be used together";
+}
+
+if ($versioning && !defined $destdir) {
+    die "-versioning needs the -destdir option";
 }
 
 my $r = new WE::DB -class => $class,
@@ -44,15 +60,46 @@ my $r = new WE::DB -class => $class,
 my $ex = new WE::Export $r
     or die "Can't get export environment for $rootdir";
 
-$ex->export_all
+$ex->export_all(-onlycontent => $only_content,
+		-onlydb      => $only_db,
+		-destdir     => $destdir,
+		-destfile    => $destfile,
+	       )
     or die "Failure while exporting $rootdir";
 
-print "Export is in " . $ex->Archive . "\n";
+print "Export is in " . ($destdir ? $ex->Tmpdir : $ex->Archive) . "\n"
+    if $v;
+
+if ($versioning) {
+    do_versioning();
+}
+
+sub do_versioning {
+    my $rcsdir = "$destdir/RCS";
+    if (!-d $rcsdir) {
+	require File::Path;
+	File::Path::mkpath($rcsdir);
+    }
+
+    opendir DIR, $destdir or die "Can't open $destdir: $!";
+    my @files = grep { /\.dd$/ } readdir(DIR);
+    closedir DIR;
+
+    require WE::Util::Functions;
+    WE::Util::Functions::_save_pwd(sub{
+        chdir $destdir or die "Can't chdir to $destdir: $!";
+    
+	for my $f (@files) {
+	    system "ci", "-l", (!$v ? "-q" : ()), "-t-$f", "-m" . scalar(localtime), $f;
+	}
+    });
+}
 
 sub usage {
     my $msg = shift;
     die "$msg
-usage: $0 [-class WEDBClass] [-rootdir dbdirectory]
+usage: $0 [-class WEDBClass] [-rootdir dbdirectory] [-db] [-content]
+          [-destdir directory] [-destfile file] [-q] [-versioning]
 ";
 }
 
@@ -65,7 +112,8 @@ we_db_export - export a complete WE_Framework database with content files
 =head1 SYNOPSIS
 
     we_db_export -class we_db_class -rootdir we_data_directory
-        [-content] [-db]
+                 [-content] [-db] [-destdir directory] [-destfile file]
+		 [-q] [-versioning]
 
 =head1 DESCRIPTION
 
@@ -76,7 +124,8 @@ Berkeley DB versions, different DBM drivers --- GDBM vs. DB_File etc.).
 
 B<Please note that the exporting mechanism may miss some vital files>.
 
-The exported files will be archived in a .tar.gz file in the /tmp
+If neither C<-destdir> nor C<-destfile> are specified, then the
+exported files will be archived in a .tar.gz file in the /tmp
 directory. The exact filename will be printed during the export
 process.
 
@@ -98,6 +147,23 @@ Export the content files only.
 =item -db
 
 Export the db files only.
+
+=item -destdir directory
+
+Put the export files into the named directory.
+
+=item -destfile file
+
+Create an archive of the export files with the specified file name.
+
+=item -q
+
+Be quiet.
+
+=item -versioning
+
+Use RCS versioning for the Data::Dumper files. Only possible together
+with C<-destdir> option.
 
 =back
 

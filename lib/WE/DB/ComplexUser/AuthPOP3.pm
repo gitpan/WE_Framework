@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: AuthPOP3.pm,v 1.1 2004/12/22 13:54:59 eserte Exp $
+# $Id: AuthPOP3.pm,v 1.2 2005/02/03 00:06:28 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2004 Slaven Rezic.
@@ -17,7 +17,7 @@ package WE::DB::ComplexUser::AuthPOP3;
 
 use strict;
 use vars qw($VERSION $DEBUG);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.1 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
 
 use mixin::with 'WE::DB::ComplexUser';
 
@@ -37,3 +37,26 @@ sub identify_POP3 {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+WE::DB::ComplexUser::AuthPOP3 - ComplexUser database authentication via POP3
+
+=head1 DESCRIPTION
+
+Use a POP3 server to authenticate the user against. The user object
+should define the additional members C<Auth_POP3_Host> for the POP3
+server to use and C<Auth_POP3_User> for the POP3 user (the user object
+Username is used if C<Auth_POP3_User> is undefined).
+
+=head1 AUTHOR
+
+Slaven Rezic
+
+=head1 SEE ALSO
+
+L<WE::DB::ComplexUser>.
+
+=cut

@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: AuthenWE.pm,v 1.7 2004/09/09 14:37:47 eserte Exp $
+# $Id: AuthenWE.pm,v 1.9 2005/03/14 10:15:30 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2001 Online Office Berlin. All rights reserved.
@@ -18,7 +18,7 @@ package Apache::AuthenWE;
 
 use strict;
 use Apache::Constants ':common';
-$Apache::AuthenWE::VERSION = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+$Apache::AuthenWE::VERSION = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
 
 sub handler {
 
@@ -65,6 +65,9 @@ sub handler {
 	if (!$rootdb) {
 	    die "Can't get db with args %args";
 	}
+	if (!$rootdb->UserDB) {
+	    die "No user database";
+	}
     };
     if ($@) {
 	$r->note_basic_auth_failure;
@@ -72,9 +75,17 @@ sub handler {
 	return AUTH_REQUIRED;
     }
 
-    if (!$rootdb->identify($name, $sent_pwd)) {
+    my $identified;
+    eval {
+	$identified = $rootdb->identify($name, $sent_pwd);
+    };
+    if ($@ || !$identified) {
 	$r->note_basic_auth_failure;
-	$r->log_reason("Apache::AuthenWE - Can't identify as $name", $r->uri);
+	my $msg = "Apache::AuthenWE - Can't identify as $name";
+	if ($@) {
+	    $msg .= " - $@";
+	}
+	$r->log_reason($msg, $r->uri);
 	return AUTH_REQUIRED;
     }
 

@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: OldController.pm,v 1.83 2005/01/29 16:48:11 eserte Exp $
+# $Id: OldController.pm,v 1.84 2005/02/23 13:13:59 eserte Exp $
 #
 # WebEditor::OldController used to be we_redisys.cgi in the old web.editor
 # system.
@@ -23,7 +23,7 @@ package WebEditor::OldController;
 
 use strict;
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.83 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.84 $ =~ /(\d+)\.(\d+)/);
 
 use base qw(Class::Accessor);
 __PACKAGE__->mk_accessors(qw(R C Class FE_Class HeaderPrinted
@@ -2337,10 +2337,11 @@ sub show_children_line {
     }
 
     my $inactive = defined $k->Release_State && $k->Release_State eq 'inactive' ? "1":"0";
-    if (!$root->is_allowed("everything") && $inactive) {
-	# inactive folders and documents are not visible to non-admins
-	next;
-    }
+## XXX It's not yet clear what "inactive" really means...
+#     if (!$root->is_allowed("everything") && $inactive) {
+# 	# inactive folders and documents are not visible to non-admins
+# 	next;
+#     }
 
     if ($k->is_folder) {
 	local $^W = 0; # because of Rights =~ ...
@@ -2679,7 +2680,7 @@ sub error {
 	$context = "Context:<br><table border=0 cellpadding=0 cellspacing=0>" . join("\n", @context) . "</table>";
     };
 
-    my $version = '$Id: OldController.pm,v 1.83 2005/01/29 16:48:11 eserte Exp $';
+    my $version = '$Id: OldController.pm,v 1.84 2005/02/23 13:13:59 eserte Exp $';
 
     my $stylesheet;
     eval {

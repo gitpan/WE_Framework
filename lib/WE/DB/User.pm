@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: User.pm,v 1.11 2003/12/16 15:21:23 eserte Exp $
+# $Id: User.pm,v 1.13 2005/02/16 22:45:50 eserte Exp $
 # Author: Olaf Mätzner
 #
 # Copyright (C) 2001 Online Office Berlin. All rights reserved.
@@ -18,7 +18,7 @@ package WE::DB::User;
 
 use strict;
 use vars qw($VERSION $ERROR);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.11 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
 
 use DB_File;
 use Fcntl;
@@ -30,6 +30,8 @@ use constant PW       => 0;
 use constant GROUPS   => 1;
 use constant FULLNAME => 2;
 use constant USERDEF  => 3;
+
+use constant ERROR_OK => 1;
 
 sub new {
     my($class, $root, $file, %args) = @_;
@@ -101,7 +103,7 @@ sub add_user {
 	return 0;
     };
     $self->{DB}{$user} = join(":",_encrypt($password),"",$fullname,@userdef);
-    return 1;
+    return ERROR_OK;
 }
 sub update_user {
     my($self, $user, $password, $fullname,$groups,@userdef) = @_;
@@ -180,7 +182,7 @@ sub add_group {
 	return 0;
     }
     if ($self->is_in_group($user,$group)) {
-	return 1; # $user already in $group
+	return ERROR_OK; # $user already in $group
     }
     if ($self->user_exists($user)) {
 	my @things = split(/:/, $self->{DB}{$user}, -1);
@@ -188,7 +190,7 @@ sub add_group {
 	if ($things[GROUPS] ) { @groups = split(/\#/, $things[GROUPS] ); }
 	push(@groups,$group);
 	$self->{DB}{$user} = join(":", $things[PW], join("#",@groups), @things[FULLNAME, USERDEF..$#things]);
-	$ret=1;
+	$ret = ERROR_OK;
     }
     return $ret;
 }
@@ -370,7 +372,11 @@ $u->set_user_field(user,fieldindex,value)
 
 =head1 DESCRIPTION
 
-Object for administration of webeditor-users. You can add, delete, identify, modify users.
+Object for administration of webeditor-users. You can add, delete,
+identify, modify users.
+
+B<NOTE>: For new projects it is generally better to use the
+L<WE::DB::ComplexUser> module instead.
 
 =head1 AUTHOR
 
@@ -387,7 +393,7 @@ variable to an error string.
 
 =head1 SEE ALSO
 
-L<WE::DB>
+L<WE::DB>, L<WE::DB::ComplexUser>.
 
 =cut
 

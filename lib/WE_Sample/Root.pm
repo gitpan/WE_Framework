@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Root.pm,v 1.6 2003/12/16 15:21:23 eserte Exp $
+# $Id: Root.pm,v 1.7 2005/02/03 00:06:29 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2001 Online Office Berlin. All rights reserved.
@@ -26,7 +26,8 @@ WE_Sample::Root - a sample implementation for a site
 
 =head1 DESCRIPTION
 
-A sample instantiation for C<WE::DB>.
+A sample instantiation for C<WE::DB>. This is mainly used for the
+WE_Framework test suite.
 
 =head1 METHODS
 
@@ -46,7 +47,7 @@ WE::DB->use_databases(qw/Obj User Content OnlineUser Name/);
 
 use strict;
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
 
 =item is_allowed($action, $object_id)
 
@@ -153,7 +154,7 @@ Slaven Rezic - slaven@rezic.de
 
 =head1 SEE ALSO
 
-L<WE::DB>.
+L<WE::DB>, L<WE_Singlesite::Root>.
 
 =cut
 

@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: SiteRestr.pm,v 1.1 2005/01/23 01:40:06 eserte Exp $
+# $Id: SiteRestr.pm,v 1.2 2005/02/03 00:06:28 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2001 Online Office Berlin. All rights reserved.
@@ -20,7 +20,7 @@ use base qw(WE::Obj::Folder);
 
 use strict;
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.1 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
 
 sub instantiable { 1 }
 
@@ -43,11 +43,15 @@ WE::Obj::SiteRestr - the root object of a site
 
 =head1 DESCRIPTION
 
-This is the restricted version of L<WE::Obj::Site>.
+This is the restricted version of L<WE::Obj::Site>. Restricted means,
+that only objects of the types L<WE::Obj::Folder>,
+L<WE::Obj::Sequence>, L<WE::Obj::LangCluster>, L<WE::Obj::Doc> are
+allowed to be children of this folder object.
 
 =head1 HISTORY
 
-This was the former C<WE::Obj::Site>. 
+This was the former C<WE::Obj::Site>. C<WE::Obj::Site> is now the
+unrestricted version of C<WE::Obj::SiteRestr>.
 
 =head1 AUTHOR
 

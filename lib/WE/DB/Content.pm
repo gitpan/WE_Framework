@@ -1,11 +1,11 @@
 # -*- perl -*-
 
 #
-# $Id: Content.pm,v 1.8 2004/05/11 13:05:13 eserte Exp $
+# $Id: Content.pm,v 1.9 2005/02/02 22:13:43 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2001 Online Office Berlin. All rights reserved.
-# Copyright (C) 2002 Slaven Rezic.
+# Copyright (C) 2002,2005 Slaven Rezic.
 # This is free software; you can redistribute it and/or modify it under the
 # terms of the GNU General Public License, see the file COPYING.
 
@@ -37,7 +37,7 @@ __PACKAGE__->mk_accessors(qw/Root Directory/);
 
 use strict;
 use vars qw($VERSION $VERBOSE);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
 
 use WE::Util::MIME qw(%mime_types);
 
@@ -86,7 +86,8 @@ sub init {
 
 =item store($objid, $content)
 
-Store the $content (which is a string) for object with id $objid.
+Store the $content (which is a string) for object with id $objid. Dies
+on failure. Existing content is not overwritten in case of errors.
 
 =cut
 
@@ -99,9 +100,10 @@ sub store {
     } else {
 	my(@oldstat) = stat $file;
 	open(C, ">$tempfile") or die "Can't write to file $tempfile: $!";
-	print C $content;
-	close C;
+	print C $content or die "Can't write content to file $tempfile: $!";
+	close C or die "Error while writing $tempfile: $!";
 	if (@oldstat) {
+	    # try to preserve ownership and mode
 	    eval {
 		chown -1, $oldstat[5], $tempfile;
 	    };
@@ -146,7 +148,7 @@ sub remove {
 =item copy($from_objid, $to_objid)
 
 Copy the content from $from_objid to $to_objid. This may be
-implemented efficiently using OS copy.
+implemented efficiently using OS copy. Dies on failure.
 
 =cut
 
@@ -155,7 +157,8 @@ sub copy {
     if (eval 'require File::Copy; 1') {
 	my $from_filename = $self->filename($from_objid);
 	my $to_filename   = $self->filename($to_objid);
-	File::Copy::copy($from_filename, $to_filename);
+	File::Copy::copy($from_filename, $to_filename)
+		or "Can't copy <$from_filename> to <$to_filename>: $!";
     } else {
 	my $content = $self->get_content($from_objid);
 	$self->store($to_objid, $content);
@@ -287,15 +290,24 @@ sub search_fulltext {
     }
 
     delete $args{-scope};
-    $self->_search_fulltext($obj, $term, %args);
+    $self->search_fulltext_in_object($obj, $term, %args);
 }
 
-sub _search_fulltext {
+=item search_fulltext_in_object($obj, $term)
+
+Search C<$term> (treated as a regular expression) in the content
+database recusively starting from the L<WE::Obj> object C<$obj> and
+return a list of object ids. If C<$obj> is a non-folder object, then
+only this object is searched.
+
+=cut
+
+sub search_fulltext_in_object {
     my($self, $obj, $term, %args) = @_;
     my @res_ids;
     if ($obj->is_folder) {
 	foreach my $s_obj ($self->Root->ObjDB->children($obj)) {
-	    push @res_ids, $self->_search_fulltext($s_obj, $term, %args);
+	    push @res_ids, $self->search_fulltext_in_object($s_obj, $term, %args);
 	}
     } elsif ($obj->is_doc) {
 	push @res_ids, $obj->Id
@@ -310,11 +322,19 @@ __END__
 
 =back
 
+=head1 NOTES
+
+There is no locking implemented in the Content database. It is assumed
+that the Content database is usually accessed through L<WE::DB::Obj>
+methods, where locking is implemented.
+
 =head1 AUTHOR
 
-Slaven Rezic - slaven@rezic.de
+Slaven Rezic - eserte@users.sourceforge.net
 
 =head1 SEE ALSO
+
+L<WE::DB::Obj>
 
 =cut
 

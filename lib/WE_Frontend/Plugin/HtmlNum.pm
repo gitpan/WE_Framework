@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: HtmlNum.pm,v 1.3 2004/10/11 22:07:53 eserte Exp $
+# $Id: HtmlNum.pm,v 1.4 2005/02/03 00:06:29 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2004 Slaven Rezic.
@@ -18,7 +18,7 @@ use base qw(Template::Plugin::Filter);
 
 use strict;
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
 
 use HTML::Entities 1.27 (); # numeric entities
 
@@ -40,7 +40,10 @@ WE_Frontend::Plugin::HtmlNum - numeric html/xml entities
 
 =head1 DESCRIPTION
 
-Like the html_entities filter, but use numeric entities instead.
+Like the html_entities filter, but use numeric entities instead. The
+usage of this filter over the "html" or "html_entities" filters is
+highly recommended to avoid all kind of utf-8 vs. 8 bit charset
+problems.
 
 =cut
 

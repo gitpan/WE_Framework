@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: TextImages.pm,v 1.4 2003/02/12 10:12:43 eserte Exp $
+# $Id: TextImages.pm,v 1.5 2005/02/03 00:06:29 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2001 Online Office Berlin. All rights reserved.
@@ -18,7 +18,7 @@ package WE_Frontend::TextImages;
 
 use strict;
 use vars qw($VERSION @EXPORT_OK);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
 
 use base 'Exporter';
 @EXPORT_OK = qw(text2gif);
@@ -209,6 +209,11 @@ An array of the bounding coordinates. See the C<getBounds> method in
 L<GD> for the exact format.
 
 =back
+
+=head1 REQUIREMENTS
+
+The L<GD> module with GIF support. Alternatively C<GD> with PNG
+support and L<GD::Convert> can also work.
 
 =head1 CAVEATS
 

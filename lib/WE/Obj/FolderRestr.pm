@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: FolderRestr.pm,v 1.1 2005/01/23 01:40:06 eserte Exp $
+# $Id: FolderRestr.pm,v 1.2 2005/02/03 00:06:28 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2001 Online Office Berlin. All rights reserved.
@@ -20,7 +20,7 @@ use base qw(WE::Obj::FolderObj);
 
 use strict;
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.1 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
 
 sub instantiable { 1 }
 
@@ -43,11 +43,15 @@ WE::Obj::FolderRestr - an object containing other objects
 
 =head1 DESCRIPTION
 
-This is the restricted version of L<WE::Obj::Folder>.
+This is the restricted version of L<WE::Obj::Folder>. Restricted
+means, that only objects of the types L<WE::Obj::Folder>,
+L<WE::Obj::Sequence>, L<WE::Obj::LangCluster>, L<WE::Obj::Doc> are
+allowed to be created as children of this folder.
 
 =head1 HISTORY
 
-This was the former C<WE::Obj::Folder>. 
+This was the former C<WE::Obj::Folder>. Now C<WE::Obj::Folder> is
+unrestricted.
 
 =head1 AUTHOR
 

@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Tgz.pm,v 1.5 2004/12/23 17:36:27 eserte Exp $
+# $Id: Tgz.pm,v 1.6 2005/02/18 11:58:26 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2004 Slaven Rezic.
@@ -17,10 +17,11 @@ package WE_Frontend::Publish::Tgz;
 
 use strict;
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.5 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.6 $ =~ /(\d+)\.(\d+)/);
 
 use WE_Frontend::Publish;
 use WE::Util::Functions qw(_save_pwd);
+use WE_Frontend::Info 1.33; # staging->message
 
 use File::Basename;
 
@@ -112,7 +113,14 @@ sub publish_tgz {
 
     $tar->write($archivefile, 1, "htdocs");
 
-    print "\nArchive file $archivefile written...\n";
+    my $message = $self->Config->staging->message;
+    if (!$message) {
+	print "\nArchive file $archivefile written...\n";
+    } elsif (ref $message eq 'CODE') {
+	print $message->(archivefile => $archivefile);
+    } else {
+	print $message;
+    }
 
     return $archivefile;
 }

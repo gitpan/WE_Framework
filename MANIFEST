@@ -234,3 +234,4 @@ lib/WebEditor/OldFeatures/NullMixin.pm
 lib/WebEditor/OldFeatures/PrintTemplates.pm
 t/11_unixauth.t
 t/60_we_db_subclassing.t
+t/91_apache_authenwe.t
