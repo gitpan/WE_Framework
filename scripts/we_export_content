@@ -1,0 +1,232 @@
+#!/usr/bin/perl -w
+# -*- perl -*-
+
+#
+# $Id: we_export_content,v 1.9 2004/12/21 23:56:02 eserte Exp $
+# Author: Slaven Rezic
+#
+# Copyright (C) 2003 Slaven Rezic. All rights reserved.
+# This program is free software; you can redistribute it and/or
+# modify it under the same terms as Perl itself.
+#
+# Mail: slaven@rezic.de
+# WWW:  http://www.sf.net/projects/we-framework
+#
+
+use strict;
+use Getopt::Long;
+
+my %opt;
+
+use WE::DB;
+use WE_Content::Base;
+use WE::Util::LangString qw(langstring);
+use HTML::Entities qw(encode_entities_numeric);
+
+if (!GetOptions(\%opt,
+		"oldlang|lang=s", "newlang=s",
+		"dumpformat=s", "rootclass=s",
+		"v")) {
+    usage();
+}
+
+usage("-dumpformat is not specifed, use XMLText or PerlDD")
+    if !defined $opt{dumpformat};
+$opt{rootclass} = "WE_Singlesite::Root" if !defined $opt{rootclass};
+
+my $datadir   = shift || usage("datasrcdir (we_data) is missing");
+my $exportdir = shift || usage("exportdir is missing");
+
+if ((-d $exportdir && scalar glob("$exportdir/*")) ||
+    (!-d $exportdir && -e $exportdir)) {
+    die "$exportdir already exists or is not empty";
+}
+if (!-e $exportdir) {
+    mkdir $exportdir or die "Can't create $exportdir: $!";
+}
+
+my $out_content_class = "WE_Content::" . $opt{dumpformat};
+eval "require $out_content_class";
+die "Probably invalid dumpformat: $@" if $@;
+
+my $rootdb = WE::DB->new(-class => $opt{rootclass},
+			 -rootdir => $datadir);
+my $objdb = $rootdb->ObjDB
+    or die "Can't open ObjDB from $datadir";
+my $contentdb = $rootdb->ContentDB
+    or die "Can't open ContentDB from $datadir";
+
+if (defined $opt{oldlang}) {
+    $WE::Util::LangString::DEFAULT_LANG = $opt{oldlang};
+}
+
+my %id_to_path;
+my %path_to_id;
+my $longest_path;
+
+$objdb->walk($objdb->root_object->Id, \&export_one);
+
+{
+    no warnings 'utf8'; # XXX perl5.005 compat...
+
+    print STDERR "Write CONTENT.txt and CONTENT.html... " if $opt{v};
+    my $infofile = "$exportdir/CONTENT.txt";
+    my $htmlfile = "$exportdir/CONTENT.html";
+    open(INFO, "> $infofile") or die "Can't write to $infofile: $!";
+    open(HTML, "> $htmlfile") or die "Can't write to $htmlfile: $!";
+    print HTML <<EOF;
+<html>
+<head><title>Content</title></head>
+<body>
+<h1>ID to Path</h1>
+<table>
+EOF
+    binmode INFO;
+    print INFO "ID to Path:\n";
+    for my $id (sort { $a <=> $b } keys %id_to_path) {
+	printf INFO "%-5d %s\n", $id, $id_to_path{$id};
+	printf HTML "<tr><td><a href='%d.xml'>%d</a></td><td>%s</td></tr>\n", $id, $id, encode_entities_numeric($id_to_path{$id});
+    }
+
+    print HTML <<EOF;
+</table>
+<h1>Path to IDs</h1>
+<table>
+EOF
+    print INFO "\nPath to IDs:\n";
+    for my $path (sort keys %path_to_id) {
+	my $id_string = join(", ", @{ $path_to_id{$path} });
+	printf INFO "%-${longest_path}s %s\n", $path, $id_string;
+	printf HTML "<tr><td>%s</td><td>", encode_entities_numeric($path);
+	for my $id (@{ $path_to_id{$path} }) {
+	    printf HTML "<a href='%d.xml'>%d</a>", $id, $id;
+	}
+	print HTML "</td></tr>\n";
+    }
+    print HTML <<EOF;
+</table>
+</body>
+</html>
+EOF
+    close HTML;
+    close INFO;
+    print STDERR "OK\n" if $opt{v};
+}
+
+sub export_one {
+    my($id) = @_;
+    my $obj = $objdb->get_object($id);
+    if ($obj->is_doc) {
+	my $content = $objdb->content($obj);
+	my $content_obj = WE_Content::Base->new(-string => $content);
+	filter_language($content_obj);
+	my $outfile = "$exportdir/$id." . $out_content_class->ext;
+	print STDERR "Write $outfile... " if $opt{v};
+	open (OUT, "> $outfile") or die "Can't write to $outfile: $!";
+	binmode OUT;
+	my %args;
+	if ($opt{dumpformat} eq 'XMLText') {
+	    $args{-lang} = $opt{newlang} || $opt{oldlang};
+	    $args{-oldlang} = $opt{oldlang};
+	}
+	print OUT $content_obj->serialize_as($opt{dumpformat}, %args);
+	close OUT;
+	print STDERR "OK\n" if $opt{v};
+	my $path = $objdb->pathname($obj);
+	$path =~ s/\.bin$//; # hackish...
+	$longest_path = length($path)
+	    if !defined $longest_path || $longest_path < length($path);
+	$id_to_path{$id} = $path;
+	push @{$path_to_id{$path}}, $id;
+    }
+}
+
+sub filter_language {
+    my($content_obj) = @_;
+    if (defined $opt{oldlang}) {
+	my $data = $content_obj->{Object}{data};
+	my @langs = keys %$data;
+	for my $lang (@langs) {
+	    if ($opt{oldlang} ne $lang) {
+		delete $data->{$lang};
+	    }
+	}
+	if (defined $opt{newlang}) {
+	    $data->{$opt{newlang}} = $data->{$opt{oldlang}};
+	    delete $data->{$opt{oldlang}};
+	}
+    }
+}
+
+sub usage {
+    my $msg = shift;
+    if ($msg) {
+	print STDERR "$msg\n";
+    }
+    die "usage: $0 [-oldlang|lang lang] [-newlang lang] [-rootclass class] [-v] -dumpformat format datasrcdir exportdir";
+}
+
+__END__
+
+=head1 NAME
+
+we_export_content - export content to be imported with we_import_content
+
+=head1 SYNOPSIS
+
+     we_export_content [-newlang|lang lang] [-checkonly] [-rootclass class]
+                       [-dumpformat format] [-v] [-f] datasrcdir exportdir
+
+=head1 DESCRIPTION
+
+Export content files from I<datasrcdir> (path to a C<we_data>
+directory) to I<exportdir> (which must be an empty or non-existent
+directory).
+
+Additionaly to the content files a description file C<CONTENT.txt> is
+created. This is a list of object ids to path names in the object
+database and vice versa. Use this list for identifying which content
+file belongs to which document in the object database.
+
+=head2 OPTIONS
+
+=over
+
+=item -oldlang lang
+
+Filter export to only the specified language. Otherwise export all
+languages.
+
+=item -newlang lang
+
+The filtered language is marked as the new language I<lang>. Only
+useful with C<-oldlang> set.
+
+=item -dumpformat format
+
+Export the files in one of the following dump formats: C<XMLText> or
+C<PerlDD> (perl dump). Theoretically there are also the dump formats
+C<YAML> and C<XML>, but these two has to many problems to be useable
+for now.
+
+=item -rootclass
+
+Class of root db (default: WE_Singlesite::Root).
+
+=item -v
+
+Be verbose.
+
+=head1 EXAMPLES
+
+See L<we_import_content/EXAMPLES>.
+
+=back
+
+=head1 AUTHOR
+
+Slaven Rezic
+
+=head1 SEE ALSO
+
+L<we_import_content>, L<WE_Content::Base>, L<YAML>.

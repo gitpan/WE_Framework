@@ -1,0 +1,73 @@
+#!/usr/bin/perl -w
+# -*- perl -*-
+
+#
+# $Id: we_permission_test,v 1.3 2004/08/29 21:07:20 eserte Exp $
+# Author: Slaven Rezic
+#
+# Copyright (C) 2002 Slaven Rezic. All rights reserved.
+# This program is free software; you can redistribute it and/or
+# modify it under the same terms as Perl itself.
+#
+# Mail: slaven@rezic.de
+# WWW:  http://www.rezic.de/eserte/
+#
+
+use strict;
+use WE::Util::Permissions;
+use Getopt::Long;
+
+my($user, $group, $process, $page, $v);
+
+if (!GetOptions("user=s" => \$user,
+		"group=s" => \$group,
+		"process=s" => \$process,
+		"page=s" => \$page,
+		"v|verbose!" => \$v,
+	       )) {
+    die "usage: $0 [-user user] [-group group] [-process process] [-page page] permissionfile";
+}
+
+my $permissionfile = shift || die "Permission file?";
+
+my $p = WE::Util::Permissions->new(-file => $permissionfile);
+my @args;
+if (defined $user) { push @args, -user => $user }
+if (defined $group) { push @args, -group => [split /,/, $group] }
+if (defined $process) { push @args, -process => $process }
+if (defined $page) { push @args, -page => $page }
+
+if ($v) {
+    require Data::Dumper; print STDERR "Line " . __LINE__ . ", File: " . __FILE__ . "\n" . Data::Dumper->new([\@args],[])->Indent(1)->Useqq(1)->Dump; # XXX
+}
+
+if ($p->is_allowed(@args)) {
+    print "yes\n";
+    exit(0);
+} else {
+    print "no\n";
+    exit(1);
+}
+
+__END__
+
+=head1 NAME
+
+we_permission_test - check a permission file
+
+=head1 SYNOPSIS
+
+    we_permission_test [-v] [-user user | -group group] [-process process]
+                       [-page page] permissionsfile
+
+=head1 DESCRIPTION
+
+Tests if a particular user or group has permissions to do the named
+process on the named page.
+
+=head1 EXAMPLES
+
+    we_permission_test -group admin -process edit -page home etc/permissions
+
+should for example print "yes", if users from group C<admin> have the
+right to C<edit> the page <home>.

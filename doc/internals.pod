@@ -1,0 +1,87 @@
+=head1 NAME
+
+internals - Some internal information about the WE_Framework
+
+=head1 DESCRIPTION
+
+=head2 ObjDB
+
+The object metadata database is implemented as an MLDBM database.
+Therefore, the contents of the database can either be looked in with
+the C<show_db> program or with the C<dump> script (the latter is
+included with C<WE_Framework>).
+
+The objects in the object database are array references of four
+elements:
+
+=over 4
+
+=item *
+
+The first element contains a hash reference to the attributes of the
+object. The current object is the current work version (if there are
+multiple versions).
+
+=item *
+
+The second element contains an array reference to the IDs of the
+children of this object. Of course, only folder objects can have
+children.
+
+=item *
+
+The third element contains an array reference to the IDs of the
+parents of this object. Multiple parents are possible; the first
+parent ID is handled as the "main" parent (e.g. as the default parent
+if no one is specified in methods like C<move>).
+
+The root object should not have any parents. Also, version objects are
+stored as normal objects in the database, but have no parents.
+
+=item *
+
+The fourth element contains an array reference to the IDs of the
+versions of this object.
+
+=back
+
+Here's an example:
+
+    [ {'Title' => 'A Folder',
+       'Id'    => '26', ...
+      },   # object
+      [],  # children (here: no children)
+      [4], # parents
+      []   # versions (here: no versions)
+    ]
+
+There are two special keys in the database:
+
+=over 4
+
+=item _root_object
+
+The value is the ID of the root object of the database (usually a
+WE::Obj::Site or WE::Obj::Sites).
+
+=item _next_id
+
+The value is the next free ID for new objects.
+
+=back
+
+=head2 ContentDB
+
+The current implementation of the content database is simply files in
+a filesystem. The file names are constructed of the corresponfing
+object id and the right content-type extension. If there is no
+content-type, then the extension ".bin" is used. For example, the
+object with the id 12 and the content-type C<text/html> is "12.html".
+
+=head1 AUTHOR
+
+Slaven Rezic <slaven@rezic.de>
+
+=head1 SEE ALSO
+
+WE::DB(3).

@@ -1,0 +1,69 @@
+#!/usr/bin/perl
+
+use strict;
+use File::Find;
+use FindBin;
+use Pod::POM;
+
+my $parser = Pod::POM->new;
+my @items;
+
+print map { s/^\|//; "$_\n" } split /\n/, <<EOF;
+|=head1 NAME
+|
+|WE_Framework_Intro - An introduction to the web.editor framework
+|
+|=head1 SYNOPSIS
+|
+|    use WE::DB;
+|
+|=head1 DESCRIPTION
+|
+|=head2 INTRODUCTION
+|
+|=over
+|
+|=item L<Installing the web.editor|INSTALL>
+|
+|=item L<System Architecture|sysarch>
+|
+|=item L<Internals|internals>
+|
+|=back
+|
+|=head2 MODULES
+|
+|=over
+|
+EOF
+
+find(
+     sub {
+	 if (-f $_ && $_ =~ /\.pm$/) {
+	     my $pom = $parser->parse_file($_)
+		 || warn $parser->error(), return;
+	     foreach my $head1 ($pom->head1()) {
+		 if ("@{[$head1->title]}" eq 'NAME') {
+		     my($modname, $descr) = split /\s*-\s*/, "@{[$head1->content]}", 2;
+		     push @items, [$modname, $descr];
+		     last;
+		 }
+	     }
+	 }
+     },
+     "$FindBin::RealBin/../lib"
+    );
+
+print map "=item L<$_->[0]|$_->[0]> - $_->[1]\n", sort { $a->[0] cmp $b->[0] } @items;
+print map { s/^\|//; "$_\n" } split /\n/, <<'EOF';
+|
+|=back
+|
+|=head1 AUTHOR
+|
+|Slaven Rezic <slaven@rezic.de>
+|
+|=head1 SEE ALSO
+|
+|L<WE::DB>, L<WE::Obj>.
+EOF

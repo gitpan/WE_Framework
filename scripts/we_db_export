@@ -1,0 +1,107 @@
+#!/usr/bin/perl -w
+# -*- perl -*-
+
+#
+# $Id: we_db_export,v 1.7 2004/08/29 21:17:22 eserte Exp $
+# Author: Slaven Rezic
+#
+# Copyright (C) 2001 Online Office Berlin. All rights reserved.
+# Copyright (C) 2002 Slaven Rezic.
+# This is free software; you can redistribute it and/or modify it under the
+# terms of the GNU General Public License, see the file COPYING.
+#
+# Mail: slaven@rezic.de
+# WWW:  http://we-framework.sourceforge.net
+#
+
+use WE::Export;
+use WE::DB;
+use Getopt::Long;
+use strict;
+
+my $class = "WE_Singlesite::Root";
+my $rootdir;
+my $only_content; # XXX ausprogrammieren
+my $only_db;
+
+if (!GetOptions("class=s" => \$class,
+		"rootdir=s" => \$rootdir,
+		"content!" => \$only_content,
+		"db!"      => \$only_db,
+	       )) {
+    usage("Wrong command line option");
+}
+
+if (!defined $rootdir) {
+    usage("-rootdir is missing but mandatory");
+}
+
+my $r = new WE::DB -class => $class,
+                   -rootdir => $rootdir,
+                   -readonly => 1,
+                   -locking => 0
+    or die "Can't get root database in $rootdir";
+my $ex = new WE::Export $r
+    or die "Can't get export environment for $rootdir";
+
+$ex->export_all
+    or die "Failure while exporting $rootdir";
+
+print "Export is in " . $ex->Archive . "\n";
+
+sub usage {
+    my $msg = shift;
+    die "$msg
+usage: $0 [-class WEDBClass] [-rootdir dbdirectory]
+";
+}
+
+__END__
+
+=head1 NAME
+
+we_db_export - export a complete WE_Framework database with content files
+
+=head1 SYNOPSIS
+
+    we_db_export -class we_db_class -rootdir we_data_directory
+        [-content] [-db]
+
+=head1 DESCRIPTION
+
+B<we_db_export> is meant to export database and content files from one
+host to another. This is sometimes necessary because of
+incompatibilities of the underlying database engines (e.g. different
+Berkeley DB versions, different DBM drivers --- GDBM vs. DB_File etc.).
+
+B<Please note that the exporting mechanism may miss some vital files>.
+
+The exported files will be archived in a .tar.gz file in the /tmp
+directory. The exact filename will be printed during the export
+process.
+
+=over
+
+=item -class we_db_class
+
+Use the named C<WE::DB> class, e.g. C<WE::Singlesite> or most probably
+C<WE_I<projectname>::Root>.
+
+=item -rootdir we_data_directory
+
+The path to the we_data directory.
+
+=item -content
+
+Export the content files only.
+
+=item -db
+
+Export the db files only.
+
+=back
+
+=head1 SEE ALSO
+
+L<WE::Export>, L<we_db_import>.
+

@@ -1,0 +1,66 @@
+#!/usr/bin/perl -w
+# -*- perl -*-
+
+#
+# $Id: we_db_import,v 1.6 2005/01/10 08:28:56 eserte Exp $
+# Author: Slaven Rezic
+#
+# Copyright (C) 2001 Online Office Berlin. All rights reserved.
+# Copyright (C) 2002 Slaven Rezic.
+# This is free software; you can redistribute it and/or modify it under the
+# terms of the GNU General Public License, see the file COPYING.
+#
+# Mail: slaven@rezic.de
+# WWW:  http://we-framework.sourceforge.net
+#
+
+use WE::Export;
+use strict;
+use Getopt::Long;
+my %args;
+$args{"-chmod"} = 1;
+if (!GetOptions("force!" => \$args{-force},
+		"v|verbose!" => \$args{-verbose},
+		"only=s" => sub {
+		    $args{-only} = [ split /,/, $_[1] ];
+		},
+		"chmod!" => \$args{"-chmod"},
+	       )) {
+    usage();
+}
+my $archive = shift || die "Export file is missing";
+my $destdir = shift || die "Destination directory is missing";
+
+WE::Export->import_archive($archive, $destdir, %args);
+
+sub usage {
+    die "
+usage: $0 [-force] [-nochmod] [-v] [-only db1,db2,...] archivefile.tar.gz destinationdirectory
+-only db1,...: dbs either ObjDB, UserDB, NameDB, or OnlineUserDB
+-nochmod: do not make any chmod manipulations, use only umask setting
+content is _always_ extracted
+";
+}
+
+__END__
+
+=head1 NAME
+
+we_db_import - import an archive created by we_db_export
+
+=head1 SYNOPSIS
+
+    we_db_import [-force] [-v] [-only db1,db2,...] archivefile.tar.gz destinationdirectory
+
+=head1 DESCRIPTION
+
+Import the named archive I<archivefile.tar.gz> formerly created by
+L<we_db_export>. The archive will be extracted to I<destinationdirectory>.
+
+The content files are always extracted. Extracting database files can
+be restricted by specifying the C<-only> option, which accepts the
+class names B<ObjDB>, B<UserDB>, B<NameDB>, or B<OnlineUserDB>.
+
+=head1 SEE ALSO
+
+L<WE::Export>, L<we_db_export>.

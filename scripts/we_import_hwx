@@ -1,0 +1,177 @@
+#!/usr/bin/perl -w
+# -*- perl -*-
+
+#
+# $Id: we_import_hwx,v 1.4 2004/08/29 21:07:20 eserte Exp $
+# Author: Slaven Rezic
+#
+# Copyright (C) 2001 Online Office Berlin. All rights reserved.
+# Copyright (C) 2002 Slaven Rezic.
+# This is free software; you can redistribute it and/or modify it under the
+# terms of the GNU General Public License, see the file COPYING.
+#
+# Mail: slaven@rezic.de
+# WWW:  http://we-framework.sourceforge.net
+#
+
+use WE_Singlesite::Root;
+use WE::Util::LangString;
+use Getopt::Long;
+use XML::DOM;
+use MIME::Base64;
+use strict;
+
+my($rootdir, $user, $password, $hwxfile, $rootobjid);
+my $v;
+if (!GetOptions("rootdir=s" => \$rootdir,
+		"user=s"    => \$user,
+		"pw|password=s" => \$password,
+		"hwxfile=s" => \$hwxfile,
+		"rootobj=s" => \$rootobjid,
+		"v+" => \$v,
+	       )) {
+    usage();
+}
+
+die "-rootdir of database is missing" unless defined $rootdir;
+die "-user is missing" unless defined $user;
+die "-hwxfile is missing" unless defined $hwxfile;
+
+my $r = new WE_Singlesite::Root -rootdir => $rootdir;
+my $o = $r->ObjDB;
+# XXX evtl. check for root?
+die "Can't identify $user" if !$r->identify($user, $password);
+
+# XXX Init db?
+
+if (!defined $rootobjid) {
+    $rootobjid = $o->root_object->Id;
+}
+my $rootobj = $o->get_object($rootobjid);
+die "Can't get object with ID $rootobjid" if !$rootobj;
+die "Root object must be a folder" if !$rootobj->is_folder;
+
+my $parser = new XML::DOM::Parser;
+my $doc = $parser->parsefile($hwxfile)
+    or die "Can't XML parse $hwxfile";
+my $outline = $doc->getElementsByTagName("OUTLINE");
+for (my $i=0; $i<$outline->getLength; $i++) {
+    my $node = $outline->item($i);
+    my $outline_c = $node->getChildNodes;
+    for (my $j=0; $j<$outline_c->getLength; $j++) {
+	my $node = $outline_c->item($j);
+	parse_hwx($node, $rootobjid);
+    }
+}
+
+sub parse_hwx {
+    my($xml_node, $objid) = @_;
+    my $tag = $xml_node->getNodeName;
+    if ($tag eq 'CONTAINER') {
+	warn "Insert folder to $objid" if $v;
+	my $nodes = $xml_node->getChildNodes;
+	my $new_folder;
+	for(my $i=0; $i<$nodes->getLength; $i++) {
+	    my $node = $nodes->item($i);
+	    if ($node->getNodeName eq 'OBJECT') {
+		$new_folder = $o->insert_folder(-parent => $objid);
+		my $meta = $node->getElementsByTagName("VERSION")->item(0)->getElementsByTagName("META")->item(0);
+		add_attributes($new_folder, $meta);
+	    } elsif ($node->getNodeName eq 'CHILDREN') {
+		die if !defined $new_folder;
+		my $children_nodes = $node->getChildNodes;
+		for(my $j=0; $j<$children_nodes->getLength; $j++) {
+		    my $child_node = $children_nodes->item($j);
+		    parse_hwx($child_node, $new_folder->Id);
+		}
+	    }
+	}
+    } elsif ($tag eq 'OBJECT') {
+	warn "Insert doc to $objid" if $v;
+	my $new_doc = $o->insert_doc(-parent => $objid);
+	my $meta = $xml_node->getElementsByTagName("VERSION")->item(0)->getElementsByTagName("META")->item(0);
+	add_attributes($new_doc, $meta);
+	my $in_content = $xml_node->getElementsByTagName("VERSION")->item(0)->getElementsByTagName("CONTENT")->item(0)->getChildNodes;
+	my $content = "";
+	for(my $j=0; $j<$in_content->getLength; $j++) {
+	    my $node = $in_content->item($j);
+	    if ($node->getNodeName eq '#text') {
+		$content .= $node->getData;
+	    }
+	}
+	$o->replace_content($new_doc, decode_base64($content));
+    } else {
+	warn "Unhandled tag $tag" if $tag ne '#text';
+    }
+}
+
+sub add_attributes {
+    my($obj, $meta) = @_;
+    my $attrs = $meta->getChildNodes;
+    my @titles;
+    for(my $i=0; $i<$attrs->getLength; $i++) {
+	my $attr = $attrs->item($i);
+	my $attr_attr = $attr->getAttributes;
+	next unless $attr_attr;
+	my $value = $attr_attr->getNamedItem("VALUE")->getNodeValue;
+	my $name  = $attr_attr->getNamedItem("NAME")->getNodeValue;
+	if ($name eq 'Author') { $name = 'Owner' }
+	elsif ($name =~ /^Time(Created|Modified)$/) { $value = hwdate2isodate($value) }
+	elsif ($name eq 'MimeType') { $name = 'ContentType' }
+	elsif ($name =~ /^(Id|GOid|HW_Checksum)$/) { next }
+	elsif ($name eq 'Title') { push @titles, $value; next }
+	$obj->{$name} = $value;
+    }
+    if (@titles) {
+	$obj->Title(hwtitle2langstr(@titles));
+    }
+    $o->replace_object($obj);
+}
+
+sub usage {
+    die <<EOF;
+Usage: $0 [-v] [-rootdir rootdir] [-user user] [-password password]
+          [-hwxfile hwxfile] [-rootobj objid]
+EOF
+}
+
+sub hwdate2isodate {
+    my $hwdate = shift;
+    $hwdate =~ s/^(\d+)\/(\d+)\/(\d+)/$1-$2-$3/;
+    $hwdate;
+}
+
+sub goid2id {
+    my $goid = shift;
+    $goid =~ s/^[^: ]+[: ]//;
+    $goid;
+}
+
+sub hwtitle2langstr {
+    my(@titles) = @_;
+    my %t;
+    foreach (@titles) {
+	if (/^([^:]+):(.*)$/) {
+	    $t{$1 eq 'ge' ? 'de' : $1} = $2;
+	} else {
+	    warn "Can't parse title $_";
+	}
+    }
+    new WE::Util::LangString %t;
+}
+
+__END__
+
+=head1 NAME
+
+we_import_hwx - import files from a HyperWave hwx file into a WE_Framework database
+
+=head1 DESCRIPTION
+
+B<This script (and the whole HyperWave support) is considered
+unsupported anymore.>
+
+=head1 BUGS
+
+This is not useable for large XML imports because XML::DOM seems to be
+inefficient... maybe I should try something like XPath...

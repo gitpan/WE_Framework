@@ -1,0 +1,314 @@
+#!/usr/bin/perl -w
+# -*- perl -*-
+
+#
+# $Id: we_dump,v 1.14 2004/08/29 21:17:22 eserte Exp $
+# Author: Slaven Rezic
+#
+# Copyright (C) 2001 Online Office Berlin. All rights reserved.
+# Copyright (C) 2002,2003,2004 Slaven Rezic.
+# This is free software; you can redistribute it and/or modify it under the
+# terms of the GNU General Public License, see the file COPYING.
+#
+# Mail: slaven@rezic.de
+# WWW:  http://we-framework.sourceforge.net
+#
+
+use WE::DB;
+use Getopt::Long;
+
+my @args;
+my $class = "WE_Singlesite::Root";
+my $lang = $ENV{LANG} || "en";
+$lang =~ s/^(..).*/$1/;
+
+my $contentattributes;
+my $contentdb;
+my $safe;
+my $lock = 0;
+my $connect = 1;
+my $readonly = 1;
+my $failsafe = 1;
+my $outfile;
+my $datadumper;
+my $versioning = 0;
+my $quiet = 0;
+my @inc;
+use vars qw($outdata);
+
+use WE::DB::Info;
+my $info = WE::DB::Info->new;
+$info->load;
+my %opt = $info->getopt;
+$class = $opt{rootclass} if defined $opt{rootclass};
+@inc = @{ $opt{inc} } if defined $opt{inc};
+
+if (!GetOptions("version|versions" => sub { push @args, -versions => 1 },
+		"root|id=s" => sub { push @args, -root => $_[1] },
+		"class=s" => \$class,
+		"lang=s"  => \$lang,
+		"attribs|attributes" => sub { push @args, -attributes => 1 },
+		"contentattribs|contentattributes" => sub {
+		    $contentattributes++;
+		    push @args, -callback => \&content_callback;
+		},
+		"lock!" => \$lock,
+		"connect!" => \$connect,
+		"readonly!" => \$readonly,
+		"failsafe!" => \$failsafe,
+		"datadumper!" => \$datadumper,
+		"o|out|outfile=s" => \$outfile,
+		"versioning!" => \$versioning,
+		"q|quiet!" => \$quiet,
+		'inc|I=s@' => \@inc,
+	       )) {
+    usage("");
+}
+
+my $rootdir = shift || ".";
+if (-f $rootdir) {
+    require File::Basename;
+    $rootdir = File::Basename::dirname($rootdir);
+}
+
+if (@inc) {
+    unshift @INC, @inc;
+}	
+
+my $r = new WE::DB -class => $class,
+                   -rootdir => $rootdir,
+                   -readonly => $readonly,
+                   -connect => $connect,
+                   -locking => $lock,
+                   -failsafe => $failsafe,
+    ;
+
+if ($contentattributes) {
+    require Safe;
+    $safe = Safe->new;
+    $safe->share(qw($outdata));
+    $contentdb= $r->ContentDB;
+}
+
+$r->CurrentLang($lang);
+if (!$r->ObjDB) {
+    die "Cannot open ObjDB database";
+}
+if ($datadumper) {
+    do_datadumper();
+} else {
+    print $r->ObjDB->dump(@args);
+    print "# next free object id is " . $r->ObjDB->_next_id . "\n";
+}
+
+sub content_callback {
+    my(%args) = @_;
+    my($obj, $indent_string) = @args{'-obj', '-indentstring'};
+    return if (!$obj->is_doc);
+    my $content = $contentdb->get_content($obj);
+    undef $outdata;
+    $safe->reval($content);
+    if (!$outdata) {
+	warn "The content file for " . $obj->Id . " is invalid";
+	return;
+    }
+    my $pagetype = $outdata->{'data'}->{'pagetype'};
+    my @langs;
+    while(my($k,$v) = each %{ $outdata->{'data'} }) {
+	if (ref $v eq 'HASH' && exists $v->{'title'}) {
+	    push @langs, $k;
+	}
+    }
+    my $visible = $outdata->{'data'}->{'visible'};
+
+    my $s = "";
+    $s .= $indent_string . "|pagetype=" . $pagetype . "\n";
+    $s .= $indent_string . "|visible=" . ($visible ? "yes" : "no") . "\n";
+    $s .= $indent_string . "|languages=" . join(",", @langs) . "\n";
+    $s;
+}
+
+sub do_datadumper {
+    require Data::Dumper;
+    my $dd = Data::Dumper->new([$r->ObjDB->{DB}],["ObjDB"]);
+    $dd->Sortkeys(1) if $dd->can("Sortkeys");
+    $dd->Indent(1);
+    $dd->Useqq(1);
+    if (!defined $outfile) {
+	print $dd->Dump;
+    } elsif (!$versioning) {
+	require File::Temp;
+	require File::Basename;
+	my($tempfh, $tempfile) = File::Temp::tempfile
+	    (SUFFIX => ".db",
+	     UNLINK => 1,
+	     DIR => File::Basename::dirname($outfile),
+	    );
+	print $tempfh $dd->Dump;
+	close $tempfh;
+	rename $tempfh, $outfile;
+    } else {
+	require File::Basename;
+	my(@stat_dump) = stat($outfile);
+	my(@stat_db)   = stat($r->ObjDB->DBFile);
+	if (@stat_dump && @stat_db &&
+	    $stat_dump[9] > $stat_db[9]) {
+	    if (!$quiet) {
+		warn "Dumpfile $outfile is current with respect to " . $r->ObjDB->DBFile . ", skip dump...\n";
+	    }
+	    return;
+	}
+	open(OUT, "> $outfile") or die "Can't write to $outfile: $!";
+	eval {
+	    print OUT $dd->Dump or die $!;
+	    close OUT or die $!;
+	};
+	if ($@) {
+	    unlink $outfile;
+	    die "Deleted outfile $outfile, $@";
+	}
+	if (!-s $outfile) {
+	    warn "Empty outfile, deleting...\n";
+	    unlink $outfile;
+	}
+	chdir File::Basename::dirname($outfile) or die "Can't chdir: $!";
+	system "ci", "-l", ($quiet ? "-q" : ()), "-m" . scalar(localtime), File::Basename::basename($outfile);
+    }
+}
+
+sub usage {
+    my($error) = @_;
+    if (eval { require Pod::Usage; 1 }) {
+	Pod::Usage::pod2usage
+		(
+		 { -message => "$error\nCurrent default value of lang: $lang\n",
+		   -exitval => 1
+		 }
+		);
+    } else {
+	die "$error
+See Pod of $0 for usage or install Pod::Usage
+";
+    }
+}
+
+__END__
+
+=head1 NAME
+
+we_dump - dump a WE ObjDB database
+
+=head1 SYNOPSIS
+
+  we_dump [-version] [-root id | -id id] [-class dbclass] [-lang lang]
+      [-attribs] [-contentattribs] [-[no]lock] [-[no]connect] [-[no]readonly]
+      [-[no]failsafe] [-datadumper] [-o outfile] [rootdir]
+
+=head1 DESCRIPTION
+
+B<we_dump> dumps a ObjDB database (only!) to a text file using
+L<Data::Dumper>. The resulting file may be used to restore a database
+with the means described in L</EXAMPLES>.
+
+=head2 OPTIONS
+
+=over
+
+=item B<-version>
+
+Show also version objects
+
+=item B<-root> I<id>
+
+Start dump at the given object id (otherwise the whole database is dumped)
+
+=item B<-id> I<id>
+
+Alias for B<-root> I<id>.
+
+=item B<-class> I<dbclass>
+
+Specify L<WE::DB> class e.g. L<WE_Singlesite::Root>
+
+=item B<-lang> I<lang>
+
+Specify language for titles (default is "en" or the value of the
+C<LANG> environment variable).
+
+=item B<-attribs>
+
+Show also attributes (very verbose!)
+
+=item B<-contentattribs>
+
+Show also content attributes (page type, languges...)
+
+=item B<-lock>
+
+Lock database (for debugging lock problems)
+
+=item B<-connect>
+
+Create permanent connection to database (for debugging, default is on)
+
+=item B<-readonly>
+
+Open readonly connection to database (default is readonly).
+
+=item B<-nofailsafe>
+
+Do not open in failsafe mode (default is failsafe)
+
+=item B<-datadumper>
+
+Do a L<Data::Dumper> dump of the object database.
+
+=item B<-o> I<file>
+
+Only in conjunction with B<-datadumper>: use the specified file for
+output. Otherwise Data::Dumper output goes to STDOUT.
+
+=item B<-versioning>
+
+Use RCS versioning for a Data::Dumper file.
+
+=item I<rootdir>
+
+The root directory of the database (default is C<.>, the current directory).
+
+=back
+
+=head1 EXAMPLES
+
+A sample crontab entry for making an hourly backup of the object
+database:
+
+ 0 * * * * we_dump -datadumper -versioning -outfile /path/to/dumpfile /path/to/we_data
+
+To restore such a dump, the following steps should be done:
+
+=over
+
+=item * Identify the wished dump version by using C<rlog> and C<co -p
+-rI<version>>.
+
+=item * Extract this dump version, e.g.
+
+	co -p -r1.78 dumpfile > dumpfile-1.78
+
+=item * Recreate the object database. Assuming a common installation
+using B<MLDBM>, B<DB_File> and B<Data::Dumper>, the following
+one-liner may be used:
+
+    perl -MMLDBM=DB_File,Data::Dumper -MFcntl -e 'tie %db, "MLDBM", "objdb.db", O_RDWR|O_CREAT, 0644 or die $!; $ObjDB = do $ARGV[0]; %db = %$ObjDB' dumpfile-version
+
+=item * Move the created F<objdb.db> to the F<we_data> directory and fix
+permissions.
+
+=back
+
+=head1 AUTHOR
+
+Slaven Rezic <eserte@users.sourceforge.net>
+
+=cut

@@ -1,0 +1,11 @@
+<!ELEMENT webeditordoc (val)+>
+<!ELEMENT val (#PCDATA)>
+
+<!ATTLIST webeditordoc
+lang CDATA #REQUIRED
+oldlang CDATA #REQUIRED
+>
+
+<!ATTLIST val
+path ID #REQUIRED
+>

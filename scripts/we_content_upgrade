@@ -1,0 +1,160 @@
+#!/usr/bin/perl -w
+# -*- perl -*-
+
+#
+# $Id: we_content_upgrade,v 1.9 2004/10/05 18:56:36 eserte Exp $
+# Author: Slaven Rezic
+#
+# Copyright (C) 2001 Online Office Berlin. All rights reserved.
+# Copyright (C) 2002 Slaven Rezic.
+# This is free software; you can redistribute it and/or modify it under the
+# terms of the GNU General Public License, see the file COPYING.
+#
+# Mail: slaven@rezic.de
+# WWW:  http://we-framework.sourceforge.net
+#
+
+use WE_Content::Base;
+use WE_Content::Tools;
+use Getopt::Long;
+
+BEGIN {
+    if ($] == 5.008) {
+	eval q{use open IN => ':bytes', OUT => ':bytes' };
+	warn $@ if $@;
+    }
+}
+
+my $root_dir;
+my $prototype_opt; # will be either $prototype_file or $prototype_dir
+my $prototype_file;
+my $prototype_dir;
+my $n = 1;
+my $v;
+my %prototypes; # for multiple prototypes (directory)
+my $prototype;  # for a single prototype (file)
+
+if (!GetOptions("upgrade!" => sub { $n = 0 },
+		"v" => \$v,
+		"rootdir=s"  => \$root_dir,
+		"template|prototype=s" => \$prototype_opt,
+	       )) {
+    usage();
+}
+
+sub usage {
+    require Pod::Usage;
+    Pod::Usage::pod2usage(1);
+}
+
+my @content_files = @ARGV;
+
+if (defined $prototype_opt) {
+    if (-f $prototype_opt) {
+	$prototype_file = $prototype_opt;
+    } elsif (-d $prototype_opt) {
+	$prototype_dir = $prototype_opt;
+    } else {
+	die "-prototype|-prototype $prototype_opt is not a valid file or directory";
+    }
+}
+
+if ($root_dir && !defined $prototype_opt) {
+    $prototype_dir = $root_dir;
+}
+
+if (defined $prototype_dir) {
+    my(@prototype_files) = glob("$prototype_dir/empty_*.bin");
+    if (!@prototype_files) {
+	die "No prototype/prototype files in directory $prototype_dir found";
+    }
+    foreach my $prototype_file (@prototype_files) {
+	my $prototype_obj = WE_Content::Base->new(-file => $prototype_file);
+	die "$prototype_file is not a valid prototype"
+	    if !$prototype_obj->is_prototype;
+	my($pagetype) = $prototype_file =~ m{empty_(.*?)\.bin$};
+	#XXX remove... $prototype_obj->{Object}{"pagetype"}
+	if (defined $pagetype) {
+	    $prototypes{$pagetype} = $prototype_obj;
+	} else {
+	    my $title = $prototype_obj->{Object}{"title"};
+	    if (defined $title) {
+		$prototypes{$title} = $prototype_obj
+	    } else {
+		die "Cannot get title or pagetype from prototype object $prototype_file";
+	    }
+	}
+    }
+    if ($v) {
+	warn "Found prototypes: " . join(", ", keys %prototypes) . "\n";
+    }
+} elsif (defined $prototype_file) {
+    $prototype = WE_Content::Base->new(-file => $prototype_file);
+    die "$prototype_file is not a valid prototype"
+	if !$prototype->is_prototype;
+} else {
+    die "Please specify either -rootdir or -prototype";
+}
+
+foreach my $content_file (@content_files) {
+    my $content  = new WE_Content::Base -file => $content_file;
+    my $prototype = $prototype;
+    if (!defined $prototype) { # prototype directory --- find the right prototype
+	my $pagetype = $content->{Object}{"data"}{"pagetype"};
+	if (defined $pagetype) {
+	    $prototype = $prototypes{$pagetype};
+	}
+	if (!defined $prototype) {
+	    my $title = $content->{Object}{"title"} || "";
+	    $prototype = $prototypes{$title};
+	    if (!defined $prototype) {
+		warn "Cannot get right prototype for title=$title (file=$content_file), skipping...\n";
+	    }
+	}
+    }
+
+    my(%diff) = $content->get_structure_diffs($prototype);
+    if ($n) {
+	use Data::Dumper;
+	print "$content_file...\n";
+	print Data::Dumper->Dumpxs([\%diff],['diff']);
+    } else {
+	$content->upgrade($prototype);
+	open(OUT, ">$content_file~") or die "Can't write to $content_file~: $!";
+	print OUT $content->serialize or die $!;
+	close OUT or die $!;
+	rename $content_file, "$content_file~~" or die $!;
+	rename "$content_file~", $content_file or die $!;
+	rename "$content_file~~", "$content_file~";
+    }
+}
+
+__END__
+
+=head1 NAME
+
+we_content_upgrade - upgrade existing content files with new prototype files
+
+=head1 SYNOPSIS
+
+    we_content_upgrade [-upgrade] [-v] [-rootdir dir]
+         [-template|-prototype dir] contentfile ...
+
+=head1 DESCRIPTION
+
+B<This is very experimentell. First try with backup data!>
+
+Upgrade the named existing content files with new prototype data.
+
+=head1 EXAMPLES
+
+Typical operation: first eye-ball the changes:
+
+    cd .../htdocs/we/I<projectname>_prototypes
+    we_content_upgrade -v -rootdir . ../../../we_data/content/*.bin
+
+And then do it:
+
+    we_content_upgrade -upgrade -v -rootdir . ../../../we_data/content/*.bin
+
+=cut

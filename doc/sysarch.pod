@@ -1,0 +1,43 @@
+=head1 NAME
+
+sysarch - the system architecture of WE_Framework
+
+=for category 
+
+=head1 SYNOPSIS
+
+=head1 DESCRIPTION
+
+=head2 SYSTEM ARCHITECTURE
+
+The overall system architecture:
+
+=for html <img src="sysarch.png">
+
+=for text sysarch.png
+
+=for man sysarch.png
+
+The SOAP architecture:
+
+=for html <img src="soaparch.png">
+
+=for text soaparch.png
+
+=for man soaparch.png
+
+The module ISA tree for the Metadata objects (documents and folders):
+
+=for html <img src="isatree.png">
+
+=for text isatree.png
+
+=for man isatree.png
+
+=head1 AUTHOR
+
+Slaven Rezic <slaven@rezic.de>
+
+=head1 SEE ALSO
+
+WE::DB(3).

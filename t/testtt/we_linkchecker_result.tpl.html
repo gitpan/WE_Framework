@@ -1,0 +1,90 @@
+<html>
+ <head>
+  <style src="[% config.paths.we_htmlurl %]/styles/cms.css"></style>
+ </head>
+ <body>
+  <h1>Ergebnisse der Linküberprüfung</h1>
+  <h2>Konfiguration</h2>
+  [% PROCESS config_header %]
+  [% IF fail_urls.keys.size == 0 %]
+   <h2>Keine Link-Fehler gefunden</h2>
+  [% ELSE %]
+   <h2>Link-Fehler</h2>
+   [% FOR url = fail_urls.keys.sort %]
+    [% PROCESS failed_url %]
+   [% END %]
+  [% END %]
+  <a href='[% config.paths.cgiurl %]/we_redisys.cgi?goto=admin'>Zurück zur Administrations-Seite</a>
+ </body>
+</html>
+
+[% BLOCK config_header %]
+  Überprüfte Start-URLs:<br>
+  <ul>
+    [% FOR url = self.get_all_urls %]
+      <li> <a target="_blank" href="[% url | html %]">[% url | html %]</a>
+    [% END %]
+  </ul>
+
+  Eingeschränkt auf:<br>
+  <ul>
+    [% IF !self.Restrict.defined %]
+      <li>keine Einschränkung
+    [%# ELSE %]
+      [% FOR url = self.Restrict %]
+	<li> [% url | html %]
+      [% END %]
+    [% END %]
+  </ul>
+
+  Verfolgen:<br>
+  <ul>
+    [% IF !self.Follow.defined %]
+      <li> alle nicht eingeschränkten Seiten
+    [% ELSE %]
+      [% FOR url = self.Follow %]
+	<li> [% url | html %]
+      [% END %]
+    [% END %]
+  </ul>
+[% END %]
+
+[% BLOCK failed_url %]
+  <h2>[% PROCESS page_link %]</h2>
+    <ul>
+      [% FOR fail_url = fail_urls.${url}.keys.sort %]
+        <li>[% PROCESS failed_page_text url=fail_url
+                                        
+	    %] (Fehler: [% self.SeenError.${fail_url}.Code %])
+      [% END %]
+    </ul>
+[% END %]
+
+[% BLOCK failed_page_text %]
+  [%- IF url.match('/images/') -%]
+    internal image ([% url %])
+  [%- ELSIF url.match('/(site_)?photos/') -%]
+    embedded photo ([% url %])
+  [%- ELSIF url.match('/videos/') -%]
+    video link ([% url %])
+  [%- ELSIF url.match('/download/') -%]
+    download link ([% url %])
+  [%- ELSIF url.match('/headline/') -%]
+    headline image ([% url %])
+  [%- ELSE -%]
+    [% url %]
+  [%- END -%]
+[% END %]
+
+[% BLOCK page_link %]
+  [%- matches = url.match('/html/[^/]+/(\d+)\.html$') -%]
+  [%- IF matches -%]
+    [%- id = matches.0 -%]
+    <a target="_blank" href="[% url | html %]">[% url | html %]</a>
+    (<a href="[% config.paths.scheme %]://[% config.paths.servername %][% config.paths.cgiurl %]/we_redisys.cgi?pageid=[% id %]&goto=pageeditorframe">Editieren</a>)
+  [%- ELSIF url == "START" -%]
+    [% url %]
+  [%- ELSE -%]
+    <a href="[% url | html %]">[% url | html %]</a>
+  [%- END -%]
+[% END %]

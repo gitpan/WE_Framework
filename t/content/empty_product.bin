@@ -1,0 +1,35 @@
+$emptydata = q~ {
+	  'title' => 'neue Produktseite',
+	  'keywords' => '',
+          'ct' => 
+          [
+               {
+                    'type' => 
+                    'free',
+                    'name' =>
+                    'Raster',
+                    'cancontain' => 
+                    ['textblock','imageblock'],
+		    ct => []
+               },
+	       {
+                    'type' => 
+                    'free',
+                    'name' =>
+                    'Referenzen',
+                    'cancontain' => 
+                    ['link'],
+		    ct => []
+	       },
+	       {
+                    'type' => 
+                    'free',
+                    'name' =>
+                    'Weitere Produkte',
+                    'cancontain' => 
+                    ['link'],
+		    ct => []
+	       }
+          ]
+     }
+~

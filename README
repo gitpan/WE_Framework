@@ -1,0 +1,25 @@
+WE_Framework
+------------
+
+This is a framework for web-based content management systems.
+
+Installation:
+
+	perl Makefile.PL
+	make all test install
+
+Documentation:
+
+You can build the documentation with
+
+	perl Makefile.PL INST_HTMLLIBDIR=html INST_HTMLSCRIPTDIR=html
+	make html documentation
+
+Please note that the module Pod::POM should be installed. The
+blib/html/system and blib/html/lib subdirectories contain the system
+and module documentation.
+
+The WE_Framework is distributed under the GNU Public License. See the
+file "COPYING" for more information.
+
+Comments to: Slaven Rezic <eserte@users.sourceforge.net>

@@ -1,0 +1,176 @@
+#!/usr/bin/perl -w
+# -*- perl -*-
+
+#
+# $Id: we_create_folder_tree,v 1.10 2005/01/30 08:26:43 eserte Exp $
+# Author: Slaven Rezic
+#
+# Copyright (C) 2002,2003,2004 Slaven Rezic. All rights reserved.
+# This program is free software; you can redistribute it and/or
+# modify it under the same terms as Perl itself.
+#
+# Mail: slaven@rezic.de
+# WWW:  http://www.sourceforge.net/projects/we-framework
+#
+
+use strict;
+use Getopt::Long;
+use WE::DB;
+use WE::Obj;
+use WE::DB::Obj;
+use WE::Util::Support;
+
+WE::Obj->use_classes(qw(:all));
+
+my $objdb_file = "objdb.db";
+my $namedb_file;
+my $folder_file;
+my $empty;
+my $user = "unknown";
+my $force = 0;
+my $with_namedb;
+
+if (!GetOptions("objdb=s" => \$objdb_file,
+		"namedb:s" => \$with_namedb,
+		"folderfile|foldertree=s" => \$folder_file,
+		"empty" => \$empty,
+		"u|user=s" => \$user,
+		"force" => \$force,
+	       )) {
+    usage();
+}
+
+if (defined $with_namedb) {
+    if ($with_namedb ne "") {
+	$namedb_file = $with_namedb;
+    } else {
+	require File::Basename;
+	require File::Spec;
+	$namedb_file = File::Spec->catfile
+	    (File::Basename::dirname($objdb_file), "name.db");
+    }
+    require WE::DB::Name;
+    $with_namedb = 1;
+}
+
+if (!defined $folder_file && !$empty) {
+    usage();
+}
+
+if (-e $objdb_file && !$force) {
+    my $yn;
+    print STDERR "WARNING: <$objdb_file> already exists. Overwrite the file? (y/N) ";
+    $yn = scalar <STDIN>;
+    if ($yn !~ /^y/i) {
+	exit(0);
+    }
+
+    print STDERR "\nHit Control-C if you are not sure.\nReally delete the database <$objdb_file>? (y/N) ";
+    $yn = scalar <STDIN>;
+    if ($yn !~ /^y/i) {
+	exit(0);
+    }
+}
+
+my $root = WE::DB->new();
+$root->CurrentUser($user);
+my $objdb = WE::DB::Obj->new($root, $objdb_file, -locking => 1, -connect => 1)
+    or die "Can't open $objdb_file";
+
+my $namedb;
+if ($with_namedb) {
+    $namedb = WE::DB::Name->new($root, $namedb_file, -locking => 1, -connect => 1)
+	or die "Can't open $namedb_file";
+}
+
+my $buf;
+if (!$empty) {
+    open(F, $folder_file) or die "Can't open $folder_file: $!";
+    local $/ = undef;
+    $buf = <F>;
+    close F;
+}
+
+$objdb->init;
+
+# web.editor expects all visible folders to have a VisibleToMenu entry...
+my $root_object = $objdb->root_object;
+$root_object->{VisibleToMenu} = 1;
+$objdb->replace_object($root_object);
+
+$namedb->init if $with_namedb && $namedb->can("init");
+
+if (!$empty) {
+    $objdb->create_folder_tree(-string => $buf);
+}
+
+sub usage {
+    require Pod::Usage;
+    Pod::Usage::pod2usage(1);
+}
+
+exit 0;
+
+__END__
+
+=head1 NAME
+
+we_create_folder_tree - create an intial database for a web.editor site
+
+=head1 SYNOPSIS
+
+  we_create_folder_tree [-objdb file] [-namedb [file]] [-u|-user user]
+                        [-force] [-foldertree file|-empty]
+
+=head1 DESCRIPTION
+
+=head1 OPTIONS
+
+=over
+
+=item -objdb filename
+
+Use the specified filename (default objdb.db) for the object database.
+
+=item -namedb
+
+(Without additional argument) Create a name database with the default
+filename name.db.
+
+=item -namedb filename
+
+Create a name database with the specified filename.
+
+=item -user username
+
+Use I<username> as the owner for all created objects. Defaults to
+C<unknown>.
+
+=item -empty
+
+Create an empty object database.
+
+=item -force
+
+Overwrite an existing object database. If not set, then the script
+asks the user interactively.
+
+=item -foldertree file
+
+Create a folder tree from the specified file. See
+L<WE::Util::Support/create_folder_tree> for the format of the file.
+
+=back
+
+=head1 CAVEATS
+
+The web.editor program expects the B<VisibleToMenu> attribute to be
+set to a true value for visible folders. Do not forget the flag when
+creating the folder tree from a file. This flag is set automatically
+for the root object.
+
+=head1 AUTHOR
+
+Slaven Rezic <eserte@users.sourceforge.net>
+
+=cut

@@ -1,0 +1,774 @@
+#!/usr/bin/perl -w
+# -*- perl -*-
+
+#
+# $Id: we_shell,v 1.13 2005/01/31 22:29:57 eserte Exp $
+# Author: Slaven Rezic
+#
+# Copyright (C) 2004 Slaven Rezic. All rights reserved.
+# This program is free software; you can redistribute it and/or
+# modify it under the same terms as Perl itself.
+#
+# Mail: eserte@users.sourceforge.net
+# WWW:  http://www.sf.net/projects/we-framework
+#
+
+use strict;
+use FindBin;
+
+use Getopt::Long;
+use Term::ReadLine;
+use Term::ReadKey ();
+use Text::ParseWords qw(shellwords);
+use POSIX qw(strftime);
+use File::Spec;
+use File::Temp qw(tempfile);
+use Data::Dumper;
+
+my %opt;
+my $lang;
+
+use WE::DB;
+use WE::DB::Info;
+use WE::Util::LangString qw(langstring);
+use WE::Util::Date qw(isodate2epoch);
+
+my $info = WE::DB::Info->new;
+$info->load;
+%opt = $info->getopt;
+
+if (!GetOptions(\%opt,
+		"rootclass=s",
+		"lang=s",
+		"lock!",
+		"connect!",
+		'inc|I=s@',
+		"debug!",
+	       )) {
+    require Pod::Usage;
+    Pod::Usage::pod2usage(2);
+}
+
+$opt{rootclass} = "WE_Singlesite::Root" if !defined $opt{rootclass};
+$lang = $opt{lang} || "en";
+$opt{lock} = 0 if !defined $opt{lock};
+$opt{connect} = 0 if !defined $opt{connect};
+
+my $debug = $opt{debug};
+
+my $datadir   = shift || ".";
+
+if ($opt{inc}) {
+    unshift @INC, @{$opt{inc}};
+}	
+
+eval q{use } . $opt{rootclass};
+die $@ if $@;
+
+my $root = $opt{rootclass}->new(-rootdir => $datadir,
+				-locking => $opt{lock},
+				-connect => $opt{connect},
+			       )
+    or die "Can't create $opt{rootclass} object";
+my $objdb = $root->ObjDB;
+my $rootclass = $opt{rootclass};
+
+my $cwd_name;
+my $cwd_obj;
+_update_cwd($objdb->root_object);
+
+my $term = Term::ReadLine->new("we_shell");
+my $OUT = $term->OUT || \*STDOUT;
+$term->Attribs->{'completion_function'} = \&_complete;
+
+my @quit_commands = qw(exit quit);
+my @commands      = qw(ls cd chlang echo meta less more help
+		       rm vi objeditor mkdir versions
+		       fsck user
+		       login logout id grep chown);
+# This is for commands which have a same-named function in perl.
+my %command_exceptions = map{($_,1)} qw(grep mkdir chown);
+my $quit_commands = "^(" . join("|", map { quotemeta $_ } @quit_commands) . ")\$";
+$quit_commands = qr($quit_commands);
+my $commands      = "^(" . join("|", map { quotemeta $_ } @commands) . ")\$";
+$commands = qr($commands);
+
+print "Use help for a list of available commands.\n";
+
+while (defined(my $l = $term->readline("$cwd_name> "))) {
+    my @args = shellwords($l);
+    my $cmd = shift @args;
+    if (defined $cmd && $cmd !~ /^\s*$/) {
+	if ($cmd =~ $quit_commands) {
+	    last;
+	} elsif ($cmd =~ $commands) {
+	    eval {
+		no strict 'refs';
+		if (exists $command_exceptions{$cmd}) {
+		    $cmd = $cmd . "_";
+		}
+		&{$cmd}(@args);
+	    };
+	    warn $@ if $@;
+	} else {
+	    warn "Unknown command $cmd\n";
+	}
+	$term->addhistory($l);
+    }
+}
+
+sub help {
+    print <<EOF;
+Implemented commands:
+ls        - list objects (documents and folders)
+cd        - change current folder
+echo      - echo command line (useful for globbing tests)
+fsck      - run we_fsck script
+user      - run we_user script
+chlang    - change default language
+meta      - show object meta information
+more/less - show object content in a pager
+rm        - delete objects
+vi        - edit object content
+objeditor - call graphical object editor (needs Tk::ObjEditor)
+mkdir	  - create a new folder
+chown	  - change owner
+versions  - show versions
+grep	  - search for meta data and/or content
+login	  - login as user
+logout    - logout
+id        - print current user
+help      - this help
+exit/quit - exit we_shell
+EOF
+}
+
+sub ls {
+    local @ARGV = @_;
+    Getopt::Long::Configure("bundling");
+    my %opt;
+    if (!GetOptions(\%opt, "a", "l", "r")) {
+	warn "usage: ls [-alr]";
+	return;
+    }
+    if (@ARGV) {
+	warn "File argument NYI";
+	return;
+    }
+
+    if ($opt{r}) {
+	_run_we_script("we_dump",
+		       "-root", $cwd_obj->Id,
+		       "-class", $rootclass,
+		       $datadir,
+		      );
+	return;
+    }
+
+    my @children = $objdb->children($cwd_obj);
+    if ($opt{l}) {
+	no warnings; # $user etc.
+	print join "\n", map {
+	    my $file_type = $_->is_folder ? "d" : "-";
+	    my $id        = $_->Id;
+	    my $user      = substr($_->Owner, 0, 8);
+	    my $size      = 0; # NYI
+	    my $modtime   = strftime "%x", localtime isodate2epoch($_->TimeModified);
+	    my $title     = langstring($_->Title, $lang);
+	    sprintf "%s %4d %-8s %6d %-12s %s",
+		$file_type, $id, $user, $size, $modtime, $title;
+	} @children;
+    } else {
+	print join "\n", map { langstring($_->Title, $lang) } @children;
+    }
+    print "\n";
+}
+
+sub cd {
+    local @ARGV = @_;
+    Getopt::Long::Configure("bundling");
+    my %opt;
+    if (!GetOptions(\%opt) || !@ARGV) {
+	warn "usage: cd folder";
+	return;
+    }
+    my $folder = $ARGV[0];
+    if ($folder eq '..') {
+	if ($cwd_obj->Id eq $objdb->root_object->Id) {
+	    # noop
+	} else {
+	    _update_cwd(($objdb->parents($cwd_obj))[0]);
+	}
+    } else {
+	if ($folder !~ /^\d+$/) {
+	    $folder = _id_by_title($folder);
+	    if (!defined $folder) {
+		warn "Unknown folder";
+		return;
+	    }
+	}
+	my $new_cwd = $objdb->get_object($folder);
+	if (!$new_cwd) {
+	    warn "No folder object with id $folder";
+	    return;
+	}
+	if (!$new_cwd->is_folder) {
+	    warn "The object with id $folder is not a folder";
+	    return;
+	}
+	_update_cwd($new_cwd);
+    }
+}
+
+sub rm {
+    local @ARGV = @_;
+    Getopt::Long::Configure("bundling", "no_ignore_case");
+    my %opt;
+    if (!GetOptions(\%opt, "r", "f", "v", "F") || !@ARGV) {
+	warn "usage: rm [-rfFv] object ...";
+	return;
+    }
+    my @objects_in_cwd = (_ids_in_cwd(), _objects_in_cwd());
+    @ARGV = map { _do_globbing($_, @objects_in_cwd) } @ARGV;
+    for my $id (@ARGV) {
+	my $obj = $objdb->get_object($id);
+	if (!$obj) {
+	    warn "Can't get object with id $id.\n";
+	    next;
+	}
+	if ($obj->is_folder && !$opt{r}) {
+	    warn "Can't remove folder if -r is not set.\n";
+	    next;
+	}
+	if (!$opt{f}) {
+	    my $title = langstring($obj->Title, $lang);
+	    if (!defined $title) {
+		$title = "with id $id";
+	    }
+	    print STDERR "Remove object " . $title . " (y/N)? ";
+	    chomp(my $yn = <STDIN>);
+	    next if ($yn !~ /^y/i);
+	}
+	my @args;
+	if ($opt{F}) {
+	    push @args, -links => "unhandled";
+	}
+	if ($opt{v}) {
+	    print STDERR "Unlink " . langstring($obj->Title, $lang) . "...\n";
+	}
+	$objdb->unlink($id, $cwd_obj->Id, @args);
+    }
+    if ($opt{F}) {
+	warn "Please run fsck in near future...\n";
+    }
+}
+
+sub echo {
+    local @ARGV = @_;
+    my @objects_in_cwd = (_ids_in_cwd(), _objects_in_cwd());
+    my @objects = map { _do_globbing($_, @objects_in_cwd) } @ARGV;
+    print "@objects\n";
+}
+
+sub fsck {
+    if ($opt{lock}) {
+	warn <<EOF;
+fsck does not work on a locked database. Please restart the shell without the
+-lock option.
+EOF
+	return;
+    }
+    # XXX supply rootclass! and other arguments
+    my @I = map { "-I$_" } @INC;
+    system("$^X", @I, File::Spec->catfile($FindBin::RealBin, "we_fsck"),
+	   $datadir);
+}
+
+sub user {
+    local @ARGV = @_;
+    _run_we_script("we_user",  -rootdir => $datadir, @ARGV);
+#XXX del:
+#     my @I = map { "-I$_" } @INC;
+#     my @cmd = ("$^X", @I, File::Spec->catfile($FindBin::RealBin, "we_user"),
+# 	       -rootdir => $datadir, @ARGV);
+#     #warn "@cmd\n";
+#     system @cmd;
+#     #if ($?) { warn "@cmd returned $?" }
+}
+
+sub chlang {
+    local @ARGV = @_;
+    if (@ARGV == 0) {
+	print "$lang\n";
+    } elsif (@ARGV == 1) {
+	$lang = $ARGV[0];
+    } else {
+	warn "usage: chlang [lang]";
+    }
+}
+
+sub meta {
+    local @ARGV = @_;
+    my @objects_in_cwd = (_ids_in_cwd(), _objects_in_cwd());
+    @ARGV = map { _do_globbing($_, @objects_in_cwd) } @ARGV;
+    for my $id (@ARGV) {
+	my $obj = $objdb->get_object($id);
+	print Data::Dumper->new([$obj], ["obj"])->Indent(1)->Useqq(1)->Dump, "\n";
+    }
+}
+
+sub _content_to_tempfile {
+    local @ARGV = @_;
+    my @objects_in_cwd = (_ids_in_cwd(), _objects_in_cwd());
+    @ARGV = map { _do_globbing($_, @objects_in_cwd) } @ARGV;
+    my($fh, $file) = tempfile(UNLINK => 1, SUFFIX => ".txt");
+    for my $id (@ARGV) {
+	if (@ARGV > 1) {
+	    print $fh "*** $id ***\n";
+	}
+	my $obj_content = eval { $objdb->content($id) };
+	if ($@) {
+	    die "Object has no content, original error was: $@";
+	}
+	print $fh $obj_content;
+    }
+    close $fh;
+    $file;
+}
+
+sub more {
+    my $f = _content_to_tempfile(@_);
+    system("more", $f);
+    unlink $f;
+}
+
+sub less {
+    my $f = _content_to_tempfile(@_);
+    system("less", $f);
+    unlink $f;
+}
+
+sub versions {
+    local @ARGV = @_;
+    my @objects_in_cwd = (_ids_in_cwd(), _objects_in_cwd());
+    @ARGV = map { _do_globbing($_, @objects_in_cwd) } @ARGV;
+    if (@ARGV != 1) {
+	warn "usage: versions object";
+	return;
+    }
+    my $id = shift @ARGV;
+    my $obj = $objdb->get_object($id);
+    if (!$obj) {
+	warn "Can't get object with id $id.\n";
+	return;
+    }
+    my @version_ids = $objdb->version_ids($id);
+    print join(" ", @version_ids), "\n";
+}
+
+sub vi {
+    local @ARGV = @_;
+    Getopt::Long::Configure("no_bundling");
+    my %opt;
+    if (!GetOptions(\%opt, "meta")) {
+	warn "usage: vi [-meta] object\n";
+	return;
+    }
+    if ($opt{meta}) {
+	warn "-meta NYI!";
+	return;
+    }
+    my @objects_in_cwd = (_ids_in_cwd(), _objects_in_cwd());
+    @ARGV = map { _do_globbing($_, @objects_in_cwd) } @ARGV;
+    if (@ARGV != 1) {
+	# XXX do not duplicate usage
+	warn "Usage: vi [-meta] object\n";
+	return;
+    }
+    my $contentdb = $root->ContentDB;
+    my $id = $ARGV[0];
+    my $filename = $contentdb->filename($id);
+    my($fh, $tempfile) = tempfile();
+    require File::Copy;
+    File::Copy::cp($filename, $tempfile) or do {
+	warn "Can't make backup in $tempfile: $!";
+	undef $tempfile;
+    };
+    system("vi", $filename);
+    require File::Compare;
+    if ($tempfile) {
+	if (File::Compare::compare($filename, $tempfile) == 0) {
+	    unlink $tempfile;
+	} else {
+	    warn "Created backup in $tempfile.\n";
+	}
+    }
+}
+
+sub objeditor {
+    local @ARGV = @_;
+    my $objid = shift @ARGV;
+    if (!defined $objid) {
+	warn "usage: objeditor objid\n";
+	return;
+    }
+    eval {
+	require Tk;
+	require Tk::ObjEditor;
+	require Storable;
+	my $mw = MainWindow->new();
+	local $Storable::forgive_me = $Storable::forgive_me = 1; # peacify -w
+	my $obj = Storable::dclone($objdb->get_object($objid));
+	$mw->ObjEditor(caller => $obj,
+		       direct => 1)->pack(-fill => "both", -expand => 1);
+	$mw->update; # XXX?
+	my $f = $mw->Frame->pack(-fill => "x");
+	my $weiter = 0;
+	$f->Button(-text => "Ok", -command => sub { $weiter = +1 })->pack(-side => "left");
+	$f->Button(-text => "Cancel", -command => sub { $weiter = -1 })->pack(-side => "left");
+	$mw->OnDestroy(sub { $weiter = -1 });
+	$mw->waitVariable(\$weiter);
+	if ($weiter == 1) {
+	    $objdb->_store_obj($obj);
+	}
+	$mw->destroy if Tk::Exists($mw);
+    };
+    warn $@ if $@;
+}
+
+sub mkdir_ {
+    local @ARGV = @_;
+    if (!@ARGV) {
+	warn "Usage: mkdir folder [folder ...]\n";
+	return;
+    }
+    for my $folder (@ARGV) {
+	my %args = (-parent => $cwd_obj,
+		    -Title => $folder,
+		   );
+	my $obj = eval { $objdb->insert_folder(%args) };
+	if ($@) {
+	    warn "While creating $folder: $@";
+	} elsif ($obj) {
+	    warn "$folder created\n";
+	}
+    }
+}
+
+sub chown_ {
+    local @ARGV = @_;
+    if (@ARGV < 2) {
+	warn "Usage: chown user object ...\n";
+	return;
+    }
+    my $user = shift @ARGV;
+    my @objects_in_cwd = (_ids_in_cwd()); # XXX not yet: , _objects_in_cwd());
+    @ARGV = map { _do_globbing($_, @objects_in_cwd) } @ARGV;
+    for my $obj_id (@ARGV) {
+	my $obj = $objdb->get_object($obj_id);
+	$obj->Owner($user);
+	$objdb->replace_object($obj);
+    }
+}
+
+sub login {
+    local @ARGV = @_;
+    my($user, $password);
+    if (@ARGV) {
+	$user = shift @ARGV;
+    }
+    if (@ARGV) {
+	warn "Usage: login [username]\n";
+	return;
+    }
+    if (!defined $user || $user eq '') {
+	$user = $term->readline("Username: ");
+    }
+    if (!defined $user || $user eq '') {
+	warn "No username given\n";
+	return;
+    }
+
+    # XXX No password check for now...
+    print STDERR "Password: ";
+    Term::ReadKey::ReadMode('noecho');
+    chomp($password = Term::ReadKey::ReadLine(0));
+    Term::ReadKey::ReadMode('normal');
+
+    my $success = $root->identify($user, $password);
+    if (!$success) {
+	warn "Password mismatch";
+	return;
+    }
+
+    print "You're logged in as <$user>.\n";
+    1;
+}
+
+sub logout {
+    $root->CurrentUser(undef);
+    print "You're not logged anymore.\n";
+    1;
+}
+
+sub id {
+    if (defined $root->CurrentUser) {
+	print "You're logged in as <" . $root->CurrentUser . ">.\n";
+    } else {
+	print "You're not logged in.\n";
+    }
+}
+
+sub grep_ {
+    local @ARGV = @_;
+    Getopt::Long::Configure("no_bundling");
+    my %opt;
+    if (!GetOptions(\%opt, "meta", "content", "r", "i")) {
+	warn "usage: grep [-meta] [-content] [-r] [-t] term object ...\n";
+	return;
+    }
+    if (!$opt{meta} && !$opt{content}) {
+	$opt{content} = 1;
+    }
+    my $term = shift @ARGV;
+    eval {
+	if ($opt{i}) {
+	    $term = qr{^(.*$term.*)$}im;
+	} else {
+	    $term = qr{^(.*$term.*)$}m;
+	}
+    };
+    if ($@) {
+	warn "Wrong regexp in pattern <$term>: $@";
+	return;
+    }
+    my @objects_in_cwd = _ids_in_cwd();
+    @ARGV = map { _do_globbing($_, @objects_in_cwd) } @ARGV;
+    my @objects;
+    if ($opt{content}) {
+	@objects = map { _recursive_without_dirs($_) } @ARGV;
+    } else {
+	@objects = map { _recursive_with_dirs($_) } @ARGV;
+    }
+    my @res;
+    for my $obj (@objects) {
+	my $add_match = sub {
+	    my($content) = @_;
+	    if ($content =~ $term) {
+		push @res, [$obj, $1];
+		1;
+	    } else {
+		0;
+	    }
+	};
+	my $added;
+	if ($opt{meta}) {
+	    require Data::Dumper;
+	    $added = $add_match->(Data::Dumper->new([$obj],['o'])->Indent(1)->Dumper);
+	}
+	if ($opt{content} && !$added) {
+	    $add_match->($objdb->content($obj->Id));
+	}
+    }
+    for my $res (@res) {
+	my($res_obj, $match_line) = @$res;
+	printf "%s\t%s: %s\n", $res_obj->Id, langstring($res_obj->Title, $lang), $match_line;
+    }
+}
+
+######################################################################
+# Helpers
+
+sub _run_we_script {
+    my(@args) = @_;
+    my $prog = shift @args;
+    my @I = map { "-I$_" } @INC;
+    my @cmd = ("$^X", @I, File::Spec->catfile($FindBin::RealBin, $prog),
+	       @args);
+    warn "@cmd\n" if $debug;
+    system @cmd;
+    if ($?) { warn "@cmd returned $?\n" }
+}
+
+sub _recursive_without_dirs {
+    my($id) = @_;
+    my @res_o;
+    my $o = $objdb->get_object($id);
+    if ($o->is_folder) {
+	for my $child_id ($objdb->children_ids($o)) {
+	    push @res_o, _recursive_without_dirs($child_id);
+	}
+    } else {
+	push @res_o, $o;
+    }
+    @res_o;
+}
+
+sub _recursive_with_dirs {
+    my($id) = @_;
+    my @res_o;
+    my $o = $objdb->get_object($id);
+    if (!$o) {
+	warn "No object for id $id, maybe fsck is needed?\n";
+	return;
+    }
+    push @res_o, $o;
+    if ($o->is_folder) {
+	for my $child_id ($objdb->children_ids($o)) {
+	    push @res_o, _recursive_with_dirs($child_id);
+	}
+    }
+    @res_o;
+}
+
+sub _complete {
+    my $pat = $_[1];
+    if ($pat =~ /^(\S+)\s+(.*)/) {
+	# doc/folder completion
+	my $cmd = $1;
+	my $doc_or_folder_pattern = $2;
+	if ($doc_or_folder_pattern =~ /\s(\S+)$/) {
+	    $doc_or_folder_pattern = $1;
+	}
+	my @docs_and_folders;
+	if ($cmd eq 'cd') {
+	    @docs_and_folders = (_folders_in_cwd(), _folder_ids_in_cwd());
+	} else {
+	    @docs_and_folders = (_objects_in_cwd(), _ids_in_cwd());
+	}
+	map { _escape($_) } grep { index($_, $doc_or_folder_pattern) >= 0 } @docs_and_folders;
+    } else {
+	# command completion
+	# escape not necessary here --- no commands with spaces etc.
+	grep { index($_, $pat) >= 0 } (@quit_commands, @commands);
+    }
+}
+
+sub _escape {
+    my $string = shift;
+    if ($string =~ /\s/) {
+	qq{"$string"};
+    } else {
+	$string;
+    }
+}
+
+sub _do_globbing {
+    my($pattern, @objects) = @_;
+    my $rx = glob2regex($pattern);
+    my @hits = grep { /$rx/ } @objects;
+    if (@hits == 0) {
+	$pattern;
+    } else {
+	@hits;
+    }
+}
+
+sub _folders_in_cwd {
+    map { langstring($_->Title, $lang) }
+    grep { $_->is_folder }
+    $objdb->children($cwd_obj);
+}
+sub _objects_in_cwd {
+    map { langstring($_->Title, $lang) } $objdb->children($cwd_obj);
+}
+sub _folder_ids_in_cwd {
+    map { $_->Id }
+    grep { $_->is_folder }
+    $objdb->children($cwd_obj);
+}
+sub _ids_in_cwd {
+    $objdb->children_ids($cwd_obj);
+}
+sub _update_cwd {
+    $cwd_obj  = shift;
+    $cwd_name = langstring($cwd_obj->Title, $lang);
+}
+sub _id_by_title {
+    my $title = shift;
+    for my $obj ($objdb->children($cwd_obj)) {
+	if ($title eq langstring($obj->Title, $lang)) {
+	    return $obj->Id;
+	}
+    }
+    undef;
+}
+
+# This is taken from
+# http://wuarchive.wustl.edu/mirrors/NetBSD/NetBSD-current/pkgsrc/pkgtools/pkglint/files/lintpkgsrc.pl
+sub glob2regex
+    {
+    my($glob) = @_;
+    my(@chars, $in_alt);
+    my($regex);
+
+    @chars = split(//, $glob);
+    while (defined($_ = shift @chars))
+	{
+	if ($_ eq '*')
+	    { $regex .= '.*'; }
+	elsif ($_ eq '?')
+	    { $regex .= '.'; }
+	elsif ($_ eq '+')
+	    { $regex .= '.'; }
+	elsif ($_ eq '\\+')
+	    { $regex .= $_ . shift @chars; }
+	elsif ($_ eq '.' || $_ eq '|' )
+	    { $regex .= quotemeta; }
+	elsif ($_ eq '{' )
+	    { $regex .= '('; ++$in_alt; }
+	elsif ($_ eq '}' )
+	    {
+	    if (!$in_alt)		# Error
+		{ return undef; }
+	    $regex .= ')';
+	    --$in_alt;
+	    }
+	elsif ($_ eq ','  && $in_alt)
+	    { $regex .= '|'; }
+	else
+	    { $regex .= $_; }
+	}
+    if ($in_alt)			# Error
+	{ return undef; }
+    if ($regex eq $glob)
+	{ return(''); }
+    if ($opt{D})
+	{ print "glob2regex: $glob -> $regex\n"; }
+    '^'.$regex.'$';
+    }
+
+__END__
+
+=head1 NAME
+
+we_shell - a simple interactive shell for accessing the web.editor databases
+
+=head1 SYNOPSIS
+
+     we_shell [-rootclass class] [-lang language] [-lock] [-connect] [datadir]
+
+=head1 DESCRIPTION
+
+C<-datadir> is optional, otherwise the current directory will be used.
+
+Set C<-connect> for a persistent connection to the berkeley db to
+speed some operations up.
+
+=head1 EXAMPLE
+
+Calling C<we_shell> with a special root class is somewhat complicated
+(I hope the we_data meta file will come some day...):
+
+    cd .../we_data
+    # only if needed, and use the /bin/sh syntax if appropriate
+    setenv PERL5LIB ../lib
+    we_shell -rootclass WE_myproject::Root .
+
+=head1 AUTHOR
+
+Slaven Rezic
+
+=head1 SEE ALSO
+
+=cut

@@ -1,0 +1,112 @@
+#!/usr/bin/perl -w
+# -*- perl -*-
+
+#
+# $Id: we_fsck,v 1.6 2004/04/05 20:23:17 eserte Exp $
+# Author: Slaven Rezic
+#
+# Copyright (C) 2002,2004 Slaven Rezic. All rights reserved.
+# This program is free software; you can redistribute it and/or
+# modify it under the same terms as Perl itself.
+#
+# Mail: slaven@rezic.de
+# WWW:  http://www.rezic.de/eserte/
+#
+
+use strict;
+use WE::DB;
+use WE::Util::Support;
+use Getopt::Long;
+
+my $class = "WE_Singlesite::Root";
+my $show = 0;
+my $v = 0;
+my $force = 0;
+
+use vars qw($outdata);
+
+if (!GetOptions("class=s" => \$class,
+		"n" => \$show,
+		"v" => \$v,
+		"f" => \$force,
+	       )) {
+    usage("Wrong command line option");
+}
+
+my $rootdir = shift or usage("rootdir is not specified in command line");
+
+my $r = new WE::DB -class => $class,
+                   -rootdir => $rootdir,
+                   -readonly => $show,
+                   -writeonly => 1,
+                   -connect => 0,
+                   -locking => !$show;
+
+my $objdb = $r->ObjDB;
+if (!$show) {
+    $objdb->connect; # lock
+}
+my $contentdb = $r->ContentDB;
+
+my $errors = $objdb->check_integrity($contentdb);
+my $has_errors = $errors->has_errors;
+
+my $has_contentdb_errors;
+my $contentdb_errors;
+if (!$contentdb) {
+    warn "Can't check ContentDB contents\n";
+} else {
+    $contentdb_errors = $contentdb->check_integrity($objdb);
+    $has_contentdb_errors = $contentdb_errors->has_errors;
+}
+
+require Data::Dumper;
+print STDERR Data::Dumper->new([$errors, $contentdb_errors],['Obj','Content'])->Indent(1)->Useqq(1)->Dump;
+
+if (!$show) {
+    if ($has_errors) {
+	my $yn;
+	if ($force) {
+	    $yn = "y";
+	} else {
+	    print STDERR "Repair object database " . $objdb->DBFile . " (please make a backup before!) (y/N)? ";
+	    $yn = scalar <STDIN>;
+	}
+	if ($yn =~ /^y/i) {
+	    $objdb->repair_database($errors, -verbose => $v);
+	} else {
+	    warn "Aborting...\n";
+	}
+    }
+
+    if ($has_contentdb_errors) {
+	my $yn;
+	if ($force) {
+	    $yn = "y";
+	} else {
+	    print STDERR "Repair content database " . $contentdb->Directory . " (y/N)? ";
+	    $yn = scalar <STDIN>;
+	}
+	if ($yn =~ /^y/i) {
+	    $contentdb->repair_database($contentdb_errors, -verbose => $v);
+	} else {
+	    warn "Aborting...\n";
+	}
+    }
+}
+
+sub usage {
+    my($error) = @_;
+    die <<EOF;
+$error
+Usage: $0 [-n] [-v] [-f] [-class classname] [-contentdb] rootdir
+-n:         show only, do not repair
+-v:         verbose
+-f:         repair without asking
+-class:     WE_Framework class e.g. WE_Singlesite::Root
+-contentdb dir: directory of the content database. By default the
+                subdirectory "content" is used.
+rootdir:    the root directory of the database
+EOF
+}
+__END__

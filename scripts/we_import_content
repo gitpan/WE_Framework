@@ -1,0 +1,335 @@
+#!/usr/bin/perl -w
+# -*- perl -*-
+
+#
+# $Id: we_import_content,v 1.5 2004/10/22 21:07:54 eserte Exp $
+# Author: Slaven Rezic
+#
+# Copyright (C) 2003 Slaven Rezic. All rights reserved.
+# This program is free software; you can redistribute it and/or
+# modify it under the same terms as Perl itself.
+#
+# Mail: slaven@rezic.de
+# WWW:  http://www.sf.net/projects/we-framework
+#
+
+use strict;
+use Getopt::Long;
+
+my %opt;
+
+use WE::DB;
+use WE_Content::Base;
+
+if (!GetOptions(\%opt,
+		"oldlang=s",
+		"newlang|lang=s",
+		"checkonly",
+		"rootclass=s",
+		"v+", "f")) {
+    die "usage: $0 [-oldlang lang] [-newlang|lang lang] [-checkonly] [-rootclass class] [-v] [-f] importdir datadestdir
+-oldlang	use the specified language as template for the new language
+		(only useful and mandatory for XMLText type)
+-newlang	set import data to specified language, otherwise use
+		language information from import files (not for XMLText type)
+-checkonly	do only the checks and exit
+-rootclass	class of root db (default: WE_Singlesite::Root)
+-v		be verbose (more for more verbosity)
+-f		force
+
+";
+}
+
+if ($> != 0) {
+    warn "*** Please execute as root to ensure preserving owner and permissions! ***\n";
+}
+
+$opt{rootclass} = "WE_Singlesite::Root" if !defined $opt{rootclass};
+
+my $importdir = shift || die "importdir is missing";
+my $datadir   = shift || die "datadir (we_data) is missing";
+
+my $infofile = "$importdir/CONTENT.txt";
+open(INFO, $infofile) or die "Can't open $infofile: $!";
+my $parse_id_to_path;
+my %id_to_path;
+while(<INFO>) {
+    if ($parse_id_to_path) {
+	chomp;
+	s/[\015\012]//g; # remove all kind of newlines
+	last if /^$/;
+	my($id, $path) = split /\s+/, $_, 2;
+	$id_to_path{$id} = $path;
+    } elsif (/^id to path/i) {
+	$parse_id_to_path = 1;
+    }
+}
+close INFO;
+
+my $rootdb = WE::DB->new(-class => $opt{rootclass},
+			 -rootdir => $datadir);
+my $objdb = $rootdb->ObjDB
+    or die "Can't open ObjDB from $datadir";
+my $contentdb = $rootdb->ContentDB
+    or die "Can't open ContentDB from $datadir";
+
+my %imported_ids;
+my %new_langs;
+
+get_imported_ids();
+check();
+exit 0 if $opt{checkonly};
+merge_content();
+
+sub _cont {
+    if ($opt{f}) {
+	print STDERR "(Continue because of -f flag)\n";
+	return;
+    }
+ OUTER: while (1) {
+	print STDERR "Continue? (y/N) ";
+	chomp(my $yn = <STDIN>);
+	if ($yn !~ /y/) {
+	    print STDERR "Really abort? (y/n) ";
+	    while (1) {
+		chomp(my $yn = <STDIN>);
+		if ($yn =~ /y/i) {
+		    die "Aborted import";
+		} elsif ($yn =~ /n/i) {
+		    next OUTER;
+		}
+		print STDERR "Please answer y or n. Really abort? (y/n) ";
+	    }
+	} else {
+	    last OUTER;
+	}
+    }
+}
+
+sub get_imported_ids {
+    opendir(D, $importdir) or die "Can't open $importdir: $!";
+    while(defined($_ = readdir D)) {
+	if (/^(\d+)/) {
+	    $imported_ids{$1} = $_;
+	}
+    }
+    closedir D;
+}
+
+sub check {
+    check_import_files_valid();
+    check_import_files_still_exist();
+    warn_newlang_content_already_exist();
+    check_complete_by_infofile();
+}
+
+sub check_import_files_valid {
+    my @invalid_content_files;
+    for my $id (sort { $a <=> $b } keys %imported_ids) {
+	my($f) = glob("$importdir/$id.*");
+	if (!-f $f) {
+	    push @invalid_content_files, $id;
+	    next;
+	}
+	my $obj = $objdb->get_object($id);
+	if (!$obj) {
+	    push @invalid_content_files, $id;
+	    next;
+	}
+	my $old_content = $objdb->content($obj);
+	my $old_content_obj = WE_Content::Base->new(-string => $old_content);
+	if (!$old_content_obj) {
+	    push @invalid_content_files, $id;
+	    next;
+	}
+	eval {
+	    WE_Content::Base->new
+		    (-file => $f,
+		     -templateobject => $old_content_obj->{Object},
+		     -oldlang        => $opt{oldlang},
+		    );
+	};
+	if ($@) {
+	    warn $@;
+	    push @invalid_content_files, $id;
+	}
+    }
+    if (@invalid_content_files) {
+	print STDERR "The following IDs have invalid content or are missing completely. It is advisable to check the syntax of these files in the import directory.\n";
+	print STDERR join "", map { "$_: $id_to_path{$_}\n" } @invalid_content_files;
+	_cont;
+    }
+}
+
+sub check_import_files_still_exist {
+    my @missing_objs;
+    my @type_mismatches;
+    for my $id (sort { $a <=> $b } keys %imported_ids) {
+	my $obj = $objdb->get_object($id);
+	if (!$obj) {
+	    push @missing_objs, $id;
+	    next;
+	}
+	if (!$obj->is_doc) {
+	    push @type_mismatches, $id;
+	}
+    }
+    if (@missing_objs) {
+	print STDERR "The following IDs are not anymore in the object database. It is advisable to remove them from the import directory.\n";
+	print STDERR join "", map { "$_: $id_to_path{$_}\n" } @missing_objs;
+	_cont;
+    }
+    if (@type_mismatches) {
+	print STDERR "The following IDs are not anymore doc objects, but probably folder objects now in the object database. It is advisable to remove them from the import directory.\n";
+	print STDERR join "", map { "$_: $id_to_path{$_}\n" } @type_mismatches;
+	_cont;
+    }
+}
+
+sub warn_newlang_content_already_exist {
+    # XXX NYI
+}
+
+sub check_complete_by_infofile {
+    my @missing_ids;
+    for my $id (sort { $a <=> $b } keys %id_to_path) {
+	if (!exists $imported_ids{$id}) {
+	    push @missing_ids, $id;
+	}
+    }
+    if (@missing_ids) {
+	local $^W = 0;
+	print STDERR "The following IDs are listed in CONTENT.txt,
+but missing in the import directory:\n";
+	print STDERR join "", map { "$_: $id_to_path{$_}\n" } @missing_ids;
+	_cont;
+    }
+}
+
+sub merge_content {
+    for my $id (sort { $a <=> $b } keys %imported_ids) {
+	print STDERR "Import $id" if $opt{v};
+	my $obj = $objdb->get_object($id);
+	my $old_content = $objdb->content($obj);
+	my $old_content_obj = WE_Content::Base->new
+	    (-string => $old_content,
+	     -debug  => $opt{v} >= 2,
+	    );
+	my $new_content_obj = WE_Content::Base->new
+	    (-file => "$importdir/$imported_ids{$id}",
+	     -templateobject => $old_content_obj->{Object},
+	     -oldlang => $opt{oldlang},
+	     -debug  => $opt{v} >= 2,
+	    );
+	my $old_data = $old_content_obj->{Object}{data};
+	my $new_data = $new_content_obj->{Object}{data};
+	for my $lang (sort keys %$new_data) {
+	    next if $lang !~ /^..$/;
+	    $new_langs{$lang}++;
+	    print STDERR " lang=$lang" if $opt{v};
+	    $old_data->{$lang} = $new_data->{$lang};
+	}
+	print STDERR " ...\n" if $opt{v};
+	$objdb->replace_content($id, $old_content_obj->serialize);
+    }
+}
+
+sub check_after {
+    my @missing_langs;
+    for my $id (sort { $a <=> $b } keys %imported_ids) {
+	print STDERR "Check $id for successful import...\n" if $opt{v};
+	my $obj = $objdb->get_object($id);
+	my $content = $objdb->content($obj);
+	my $content_obj = WE_Content::Base->new(-string => $content);
+	my $data = $content_obj->{Object}{data};
+	for my $new_lang (keys %new_langs) {
+	    if (!exists $data->{$new_lang}) {
+		push @missing_langs, [$id, $new_lang];
+	    }
+	}
+    }
+    if (@missing_langs) {
+	print STDERR "Failing check after merge (langs are missing):\n";
+	print STDERR join "", map { "$_->[0] (lang $_->[1]): $id_to_path{$_->[0]}\n" } @missing_langs;
+    }
+}
+
+__END__
+
+=head1 NAME
+
+we_import_content - import content previously created by we_export_content
+
+=head1 SYNOPSIS
+
+     we_import_content [-newlang|lang lang] [-checkonly] [-rootclass class]
+                       [-v] [-f] importdir datadestdir
+
+=head1 DESCRIPTION
+
+Import content files from I<importdir> (which was formerly created by
+we_export_content) to a I<datadestdir> (which is a path to a
+C<we_data> directory).
+
+Caution: please make a backup from I<datadestdir> before using this
+command!
+
+=head2 OPTIONS
+
+=over
+
+=item -newlang
+
+Set import data to specified language, otherwise use language
+information from import files.
+
+=item -checkonly
+
+Do only the checks and exit.
+
+=item -rootclass
+
+Class of root db (default: L<WE_Singlesite::Root>).
+
+=item -v
+
+Be verbose.
+
+=item -f
+
+Force execution if some checks fail, otherwise ask interactively.
+
+=back
+
+=head1 EXAMPLES
+
+For translation purposes the XMLText export is recommended. Here's an
+example to export the whole content tree, to be translated from german
+to english:
+
+    we_export_content -oldlang de -newlang en -dumpformat XMLText ..../we_data /tmp/translation
+    # edit the files in /tmp/translation
+    we_import_content /tmp/translation ..../we_data
+
+(Old example, do not use anymore XXX:)
+
+Export the content tree for translation (here: translate from german
+to english) and re-import it. The language C<de> is used as a template
+for the new language C<en>.
+
+    we_export_content -oldlang de -newlang en -dumpformat XML ..../we_data /tmp/translation
+    # edit the files in /tmp/translation
+    we_import_content /tmp/translation ..../we_data
+
+=head1 BUGS and LIMITATIONS
+
+If there is already content for I<newlang> in the content database,
+then it is overwritten without warnings.
+
+=head1 AUTHOR
+
+Slaven Rezic
+
+=head1 SEE ALSO
+
+L<we_export_content>, L<WE_Content::Base>, L<YAML>.

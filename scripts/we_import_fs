@@ -1,0 +1,120 @@
+#!/usr/bin/perl -w
+# -*- perl -*-
+
+#
+# $Id: we_import_fs,v 1.4 2004/08/29 21:07:20 eserte Exp $
+# Author: Slaven Rezic
+#
+# Copyright (C) 2001 Online Office Berlin. All rights reserved.
+# Copyright (C) 2002 Slaven Rezic.
+# This is free software; you can redistribute it and/or modify it under the
+# terms of the GNU General Public License, see the file COPYING.
+#
+# Mail: slaven@rezic.de
+# WWW:  http://we-framework.sourceforge.net
+#
+
+use WE::DB;
+use Getopt::Long;
+use Cwd;
+use File::Find;
+use File::Spec;
+use strict;
+
+my($rootdir, $user, $password, $fsdir, $rootobjid, $class);
+my $v;
+if (!GetOptions("rootdir=s" => \$rootdir,
+		"user=s"    => \$user,
+		"pw|password=s" => \$password,
+		"rootobj=s" => \$rootobjid,
+		"v+" => \$v,
+		"class=s" => \$class,
+	       )) {
+    usage();
+}
+
+$class = "WE_Singlesite::Root" unless defined $class;
+
+$fsdir = shift || cwd;
+$fsdir = File::Spec->canonpath($fsdir);
+
+die "The directory $fsdir does not exist or is not a directory" if !-d $fsdir;
+die "-rootdir of database is missing" unless defined $rootdir;
+die "-user is missing" unless defined $user;
+
+$rootdir = File::Spec->rel2abs($rootdir); # because File::Find changes the cwd
+
+my $r = new WE::DB -class => $class, -rootdir => $rootdir;
+my $o = $r->ObjDB;
+# XXX evtl. check for root?
+die "Can't identify $user" if !$r->identify($user, $password);
+
+if (!defined $rootobjid) {
+    $rootobjid = $o->root_object->Id;
+}
+
+my %name2id;
+
+$name2id{$fsdir} = $rootobjid;
+
+find(\&wanted, $fsdir);
+
+sub wanted {
+    return if /^\./; # ignore dot files
+    my $parent = $name2id{$File::Find::dir};
+    if (!defined $parent) {
+	die "Can't find parent id for $File::Find::dir";
+    }
+    my %extra_args = extra_attrs($_);
+    if (-f) {
+	$o->insert_doc(-file => $_,
+		       -parent => $parent,
+		       -Title => $_,
+		       %extra_args,
+		      );
+    } elsif (-d) {
+	my $f = $o->insert_folder(-parent => $parent,
+				  -Title => $_,
+				  %extra_args,
+				 );
+	$name2id{$File::Find::name} = $f->Id;
+    }
+}
+
+sub extra_attrs {
+    my($filename) = @_;
+    my %attrs;
+    if (-f $filename) {
+	my $mimetype = $r->ContentDB->get_mime_type_by_filename($filename);
+	if ($mimetype =~ /^image\//) {
+	    if (eval 'require Image::Size; 1') {
+		my($x, $y) = Image::Size::imgsize($filename);
+		if (defined $x && defined $y) {
+		    $attrs{-Image_Geometry} = $x.'x'.$y;
+		    $attrs{-Image_Width} = $x;
+		    $attrs{-Image_Height} = $x;
+		}
+	    } else {
+		warn $@;
+	    }
+	}
+    }
+    %attrs;
+}
+
+__END__
+
+=head1 NAME
+
+we_import_fs - import files into a WE_Framework database
+
+=head1 SYNOPSIS
+
+    we_import_fs -rootdir directory -user user -password password
+                 -rootobj objid -class we_db_class [-v]
+
+=head1 DESCRIPTION
+
+B<This is very experimental. It is not useful in conjunction with the
+web.editor system>.
+

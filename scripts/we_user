@@ -1,0 +1,312 @@
+#!/usr/bin/perl -w
+# -*- perl -*-
+
+#
+# $Id: we_user,v 1.15 2005/01/31 22:29:57 eserte Exp $
+# Author: Slaven Rezic
+#
+# Copyright (C) 2002,2004 Slaven Rezic.
+# This is free software; you can redistribute it and/or modify it under the
+# terms of the GNU General Public License, see the file COPYING.
+#
+# Mail: slaven@rezic.de
+# WWW:  http://we-framework.sourceforge.net
+#
+
+use strict;
+
+use Getopt::Long;
+
+my @args;
+my $class = "WE::DB::ComplexUser";
+my $contained_in;
+my $force_dd;
+my $rootdir = ".";
+my $userdb_file;
+my $onlineuserdb_file;
+my $need_rw = 1;
+my @inc;
+
+use WE::DB::Info;
+
+my $info = WE::DB::Info->new;
+$info->load;
+my %opt = $info->getopt;
+
+$class = $opt{userdbclass} if defined $opt{userdbclass};
+$contained_in = $opt{userdbclass_file} if defined $opt{userdbclass_file};
+@inc = @{ $opt{inc} } if defined $opt{inc};
+
+Getopt::Long::config('pass_through', 'no_auto_abbrev');
+GetOptions("class=s" => \$class,
+	   "containedin=s" => \$contained_in,
+	   "forcedd|forcedatadumper!" => \$force_dd,
+	   "rootdir=s" => \$rootdir,
+	   "userdb=s" => \$userdb_file,
+	   "onlineuserdb=s" => \$onlineuserdb_file,
+	   'inc=s@' => \@inc,
+	  );
+Getopt::Long::config('no_pass_through');
+
+if (@inc) {
+    unshift @INC, @inc;
+}
+
+my $command = shift @ARGV;
+my %cmdarg;
+if ($command =~ /^-/) {
+    usage("Wrong command line option $command");
+} elsif ($command eq 'show') {
+    $need_rw = 0;
+} elsif ($command =~ /^(add|add-if-not-exists)$/) {
+    if (!GetOptions('u|user=s' => \$cmdarg{User},
+		    'p|pw|password=s' => \$cmdarg{Password},
+		    'n|name|fullname=s' => \$cmdarg{Fullname},
+		    'g|groups=s' => \$cmdarg{GroupString},
+		   )) {
+	usage("wrong arguments for add");
+    }
+} elsif ($command =~ /^(del|delete)$/) {
+    if (!GetOptions('u|user=s' => \$cmdarg{User},
+		   )) {
+	usage("wrong arguments for del");
+    }
+    $command = "del";
+} elsif ($command eq 'passwd') {
+    if (!GetOptions('u|user=s' => \$cmdarg{User},
+		    'p|pw|password=s' => \$cmdarg{Password},
+		   )) {
+	usage("wrong arguments for passwd");
+    }
+} elsif ($command =~ /^(update|change)$/) {
+    if (!GetOptions('u|user=s' => \$cmdarg{User},
+		    'p|pw|password=s' => \$cmdarg{Password},
+		    'n|name|fullname=s' => \$cmdarg{Fullname},
+		    'g|groups=s' => \$cmdarg{GroupString},
+		    'k|key=s' => \$cmdarg{Key},
+		    'v|val|value=s' => \$cmdarg{Value},
+		   )) {
+	usage("wrong arguments for update");
+    }
+    $command = "update";
+} elsif ($command =~ /^(dbinfo|meta)$/) {
+    if (!GetOptions('k|key=s' => \$cmdarg{Key},
+		    'v|val|value=s' => \$cmdarg{Value},
+		   )) {
+	usage("wrong arguments for dbinfo");
+    }
+    $command = "dbinfo";
+} else {
+    usage("Invalid command $command");
+}
+
+if (!defined $userdb_file) {
+    if (-d $rootdir) {
+	$userdb_file = "$rootdir/userdb.db";
+    } else {
+	die "$rootdir is not a directory";
+    }
+}
+
+if (@ARGV) {
+    die "Extra arguments: @ARGV";
+}
+
+my $module = $class;
+if ($contained_in) {
+    $module = $contained_in;
+}
+eval 'require ' . $module; die $@ if $@;
+
+# Check if the file exists already and has the correct format
+if (-e $userdb_file) {
+    my $db;
+    # XXX why is this eval not quiet???
+    eval {
+	$db = $class->new(undef, $userdb_file, -connect => 1, -readonly => 1);
+    };
+    if ($@ || !$db) {
+	#warn $@;
+    } else {
+	die "Wrong class for $userdb_file?" if !$db->check_data_format;
+    }
+}
+
+my $db = get_db();
+
+if ($onlineuserdb_file) {
+    require WE::DB::OnlineUser;
+    my $online_db = WE::DB::OnlineUser->new(undef, $onlineuserdb_file);
+    die "Can't open/create WE::DB::OnlineUser database from $onlineuserdb_file" if !$online_db;
+}
+
+if ($command eq 'show') {
+    if (!$force_dd && eval { require YAML }) {
+	print YAML::Dump($db->{DB}), "\n";
+    } else {
+	require Data::Dumper;
+	print Data::Dumper->new([$db->{DB}],[])->Indent(1)->Useqq(1)->Dump;
+    }
+
+} elsif ($command eq 'add-if-not-exists') {
+    if (!defined $cmdarg{User}) {
+	die "Username necessary!";
+    }
+    if (!$db->user_exists($cmdarg{User})) {
+	add_user();
+    }
+} elsif ($command eq 'add') {
+    add_user();
+
+} elsif ($command eq 'del') {
+    if (!defined $cmdarg{User}) {
+	die "Username necessary!";
+    }
+    $db->delete_user($cmdarg{User});
+
+} elsif ($command eq 'passwd') {
+    if (!defined $cmdarg{User}) {
+	die "Username necessary!";
+    }
+    $cmdarg{Password} = get_password($cmdarg{User})
+	if !defined $cmdarg{Password};
+    $db->update_user($cmdarg{User}, $cmdarg{Password}, undef, undef);
+
+} elsif ($command eq 'update') {
+    if (!defined $cmdarg{User}) {
+	die "Username necessary!";
+    }
+
+    $db->update_user($cmdarg{User}, $cmdarg{Password}, $cmdarg{Fullname}, undef);
+
+    if (defined $cmdarg{GroupString}) {
+	foreach my $group ($db->get_groups($cmdarg{User})) {
+	    $db->delete_group($cmdarg{User}, $group);
+	}
+	foreach my $group (split /,/, $cmdarg{GroupString}) {
+	    if ((my $err = $db->add_group($cmdarg{User}, $group)) != 1) {
+		die "Error $err while adding group $group for $cmdarg{User}";
+	    }
+	}
+    }
+
+    if (defined $cmdarg{Key}) {
+	my $u = $db->get_user_object($cmdarg{User});
+	if (!$u) {
+	    die "Can't get user object";
+	}
+	$u->{$cmdarg{Key}} = $cmdarg{Value};
+	$db->set_user_object($u);
+    }
+
+} elsif ($command eq 'dbinfo') {
+    # XXX Should not poke in the internals!
+    my $dbinfo = $db->DB->{__DBINFO__};
+    my $dbinfo_usage = <<EOF;
+Known keys/values for dbinfo:
+-k CryptMode|crypt   -v none|crypt
+-k InvalidChars      -v ...
+-k InvalidGroupChars -v ...
+
+Warning: changing the crypt mode will invalidate all passwords!
+EOF
+    if (!defined $cmdarg{Key}) {
+	die "-k is needed for dbinfo
+$dbinfo_usage";
+    }
+    if ($cmdarg{Key} =~ /^(CryptMode|crypt)$/i) {
+	$dbinfo->CryptMode($cmdarg{Value});
+    } elsif ($cmdarg{Key} =~ /^InvalidChars$/i) {
+	$dbinfo->InvalidChars($cmdarg{Value});
+    } elsif ($cmdarg{Key} =~ /^InvalidGroupChars$/i) {
+	$dbinfo->InvalidGroupChars($cmdarg{Value});
+    } else {
+	die "Unknown key $cmdarg{Key}
+$dbinfo_usage";
+    }
+    $db->DB->{__DBINFO__} = $dbinfo;
+}
+
+sub add_user {
+    if (!defined $cmdarg{User}) {
+	die "Username necessary!";
+    }
+    my $userobj = $db->UserObjClass->new
+	(Username => $cmdarg{User},
+	 Password => $cmdarg{Password},
+	 Realname => $cmdarg{Fullname},
+	);
+    if ((my $err = $db->add_user_object($userobj)) != 1) {
+	die "Error (code=$err) while adding user $cmdarg{User}";
+    }
+    if ($cmdarg{GroupString}) {
+	foreach my $group (split /,/, $cmdarg{GroupString}) {
+	    if ((my $err = $db->add_group($cmdarg{User}, $group)) != 1) {
+		die "Error (code=$err) while adding group $group for $cmdarg{User}";
+	    }
+	}
+    }
+}
+
+sub get_db {
+    my(%args) = @_;
+    my $db = $class->new(undef, $userdb_file, -readonly => !$need_rw);
+    die "Can't open $class database from $userdb_file" if !$db;
+    $db;
+}
+
+sub usage {
+    my($error) = @_;
+    die <<EOF;
+$error
+Usage: $0 [-class classname] [-containedin modulename] command options ...
+       [-rootdir dir | -userdb file -onlineuserdb file]
+
+Valid commands are:
+  show
+  add -u user -p password [-n "Full Name"] [-g group1,group2,...]
+  add-if-not-exists -u user -p password [-n "Full Name"] [-g group1,group2,...]
+  del -u user
+  passwd -u user -p password
+  update -u user [-p password] [-n "Full Name"] [-g group1,group2,...]
+  dbinfo -k key -v value
+
+Other options:
+-class:     WE_Framework UserDB class e.g. WE::DB::User or WE::DB::ComplexUser
+	    Default is $class
+-containedin: Set this if the UserDB class is contained in another module
+-rootdir    The root directory of the database (can be used instead of
+	    specifying -userdb)
+-userdb     The user database file
+-onlineuserdb The online user database file
+EOF
+}
+
+sub get_password {
+    my $user = shift;
+    my $password;
+    if (eval { require Term::ReadKey; 1 }) {
+	while (1) {
+	    print STDERR "Password for $user: ";
+	    Term::ReadKey::ReadMode('noecho');
+	    chomp($password = Term::ReadKey::ReadLine(0));
+	    Term::ReadKey::ReadMode(0);
+	    print STDERR "\nRetype password for $user: ";
+	    Term::ReadKey::ReadMode('noecho');
+	    chomp(my $retype_password = Term::ReadKey::ReadLine(0));
+	    Term::ReadKey::ReadMode(0);
+	    print STDERR "\n";
+	    last if $password eq $retype_password;
+	    print STDERR "Password mismatch. Please retry again.\n";
+	};
+    } else {
+	print STDERR "WARNING: Term::ReadKey could not be loaded, therefore the password will be
+visible on the screen.
+
+Password for $user: ";
+	chomp($password = <STDIN>);
+    }
+    $password;
+}
+
+__END__

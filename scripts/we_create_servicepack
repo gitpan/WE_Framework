@@ -1,0 +1,51 @@
+#!/usr/local/bin/perl -w
+# -*- perl -*-
+
+#
+# $Id: we_create_servicepack,v 1.4 2004/08/29 21:07:20 eserte Exp $
+# Author: Slaven Rezic
+#
+# Copyright (C) 2001 Online Office Berlin. All rights reserved.
+# Copyright (C) 2002 Slaven Rezic.
+# This is free software; you can redistribute it and/or modify it under the
+# terms of the GNU General Public License, see the file COPYING.
+#
+# Mail: slaven@rezic.de
+# WWW:  http://we-framework.sourceforge.net
+#
+
+use WE_Frontend::Installer;
+
+sub usage {
+    my $msg = @_;
+die "$msg
+usage: $0 -destfile dest.tar.gz [-since date] [-wesiteinfo WEsiteinfo_project.pm] [-v]
+";
+}
+
+use Getopt::Long;
+my $destfile;
+my %args;
+if (!GetOptions("destfile=s" => \$destfile,
+		"wesiteinfo=s" => \$args{-wesiteinfo},
+		"since=s" => \$args{-since},
+		"v" => \$args{-verbose},
+	       )) {
+    usage "usage: unknown option";
+}
+
+if (!defined $destfile) {
+    usage "The -destfile option is missing";
+}
+
+if (!defined $args{-wesiteinfo}) {
+    warn "The -wesiteinfo option is missing ... will not add WEsiteinfo.pm to the tar archive.\n";
+}
+
+WE_Frontend::Installer->create_servicepack($destfile, %args);
+
+__END__
+
+=head1 NAME
+
+we_create_servicepack - not supported anymore

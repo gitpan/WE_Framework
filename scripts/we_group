@@ -1,0 +1,163 @@
+#!/usr/bin/perl -w
+# -*- perl -*-
+
+#
+# $Id: we_group,v 1.1 2004/05/11 15:01:51 eserte Exp $
+# Author: Slaven Rezic
+#
+# Copyright (C) 2002, 2004 Slaven Rezic.
+# This is free software; you can redistribute it and/or modify it under the
+# terms of the GNU General Public License, see the file COPYING.
+#
+# Mail: slaven@rezic.de
+# WWW:  http://we-framework.sourceforge.net
+#
+
+use Getopt::Long;
+
+my @args;
+my $class = "WE::DB::ComplexUser";
+my $force_dd;
+my $rootdir = ".";
+my $userdb_file;
+
+Getopt::Long::config('pass_through', 'no_auto_abbrev');
+GetOptions("class=s" => \$class,
+	   "forcedd|forcedatadumper!" => \$force_dd,
+	   "rootdir=s" => \$rootdir,
+	   "userdb=s" => \$userdb_file,
+	  );
+Getopt::Long::config('no_pass_through');
+
+my $command = shift @ARGV;
+my %cmdarg;
+if ($command =~ /^-/) {
+    usage("Wrong command line option $command");
+} elsif ($command eq 'show') {
+} elsif ($command =~ /^(add|add-if-not-exists)$/) {
+    if (!GetOptions('g|group=s' => \$cmdarg{Group},
+		    'desc|description=s' => \$cmdarg{Description},
+		   )) {
+	usage("wrong arguments for add");
+    }
+} elsif ($command =~ /^(del|delete)$/) {
+    if (!GetOptions('g|group=s' => \$cmdarg{Group},
+		   )) {
+	usage("wrong arguments for del");
+    }
+    $command = "del";
+} elsif ($command =~ /^(update|change)$/) {
+    if (!GetOptions('g|group=s' => \$cmdarg{Group},
+		    'desc|description=s' => \$cmdarg{Description},
+		   )) {
+	usage("wrong arguments for update");
+    }
+    $command = "update";
+} else {
+    usage("Invalid command $command");
+}
+
+if (!defined $userdb_file) {
+    if (-d $rootdir) {
+	$userdb_file = "$rootdir/userdb.db";
+    } else {
+	die "$rootdir is not a directory";
+    }
+}
+
+if (@ARGV) {
+    die "Extra arguments: @ARGV";
+}
+
+eval 'require ' . $class; die $@ if $@;
+
+# Check if the file exists already and has the correct format
+if (-e $userdb_file) {
+    my $db;
+    # XXX why is this eval not quiet???
+    eval {
+	$db = $class->new(undef, $userdb_file, -connect => 1, -readonly => 1);
+    };
+    if ($@ || !$db) {
+	#warn $@;
+    } else {
+	die "Wrong class for $userdb_file?" if !$db->check_data_format;
+    }
+}
+
+my $db = $class->new(undef, $userdb_file);
+die "Can't open $class database from $userdb_file" if !$db;
+
+if ($command eq 'show') {
+    my %g = map { ($_, $db->get_group_definition($_)) } $db->get_all_groups;
+    if (!$force_dd && eval { require YAML }) {
+	print YAML::Dump(\%g), "\n";
+    } else {
+	require Data::Dumper;
+	print Data::Dumper->new([\%g],[])->Indent(1)->Useqq(1)->Dump;
+    }
+
+} elsif ($command eq 'add-if-not-exists') {
+    if (!defined $cmdarg{Group}) {
+	die "Group name necessary!";
+    }
+    if (!$db->group_exists($cmdarg{Group})) { # XXX does not work yet!
+	add_group();
+    }
+} elsif ($command eq 'add') {
+    add_group();
+
+} elsif ($command eq 'del') {
+    if (!defined $cmdarg{Group}) {
+	die "Group name necessary!";
+    }
+    $db->delete_group_definition($cmdarg{Group});
+
+} elsif ($command eq 'update') {
+    if (!defined $cmdarg{Group}) {
+	die "Group name necessary!";
+    }
+
+    update_group();
+}
+
+sub add_group {
+    if (!defined $cmdarg{Group}) {
+	die "Group name necessary!";
+    }
+    if ((my $err = $db->add_group_definition($cmdarg{Group})) != 1) {
+	die "Error (code=$err) while adding group $cmdarg{Group}";
+    }
+    update_group();
+}
+
+sub update_group {
+    my $group = $db->get_group_definition($cmdarg{Group});
+    $group->{Description} = $cmdarg{Description}
+	if defined $cmdarg{Description};
+    $db->set_group_definition($cmdarg{Group}, $group);
+}
+
+sub usage {
+    my($error) = @_;
+    die <<EOF;
+$error
+Usage: $0 [-class classname] command options ...
+       [-rootdir dir | -userdb file -onlineuserdb file]
+
+Valid commands are:
+  show
+  add -g group [-desc description]
+  add-if-not-exists -g group [-desc description]
+  del -g group
+  update -g group [-desc description]
+
+Other options:
+-class:     WE_Framework UserDB class e.g. WE::DB::ComplexUser
+	    Default is $class
+-rootdir    The root directory of the database (can be used instead of
+	    specifying -userdb)
+-userdb     The user database file
+EOF
+}
+__END__
