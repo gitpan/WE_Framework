@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: Makefile.PL,v 1.55 2005/02/21 21:04:05 eserte Exp $
+# $Id: Makefile.PL,v 1.59 2007/10/03 10:13:06 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2001 Onlineoffice. All rights reserved.
@@ -44,7 +44,7 @@ BEGIN {
      [
       -default           => 0,
       'Template'         => 2.09,
-      'Data::JavaScript' => 0,    # passing data between server and client
+      'Data::JavaScript' => 1.10, # passing data between server and client
       'HTML::Entities'   => 1.27,
       'Tie::IxHash'      => 0,    # sort order in imageeditor
       'HTML::LinkExtor'  => 0,    # link checker
@@ -157,7 +157,7 @@ if (0) {
 WriteMakefile
   (
    'NAME'	   => 'WE_Framework',
-   'VERSION'       => '0.097_01',
+   'VERSION'       => '0.097_02',
    'EXE_FILES'     => [qw|
 		          scripts/we_content_upgrade
 		          scripts/we_create_folder_tree
@@ -183,6 +183,7 @@ WriteMakefile
    'ABSTRACT'      => 'The web.editor backend',
 #   'ABSTRACT_FROM' => 'doc/WE_Framework_Intro.pod',
    'AUTHOR'        => 'Slaven Rezic (slaven@rezic.de)',
+   'NO_META'       => 1,
   );
 
 # ignore autoinstall.pl

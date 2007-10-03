@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Support.pm,v 1.9 2004/04/05 20:32:04 eserte Exp $
+# $Id: Support.pm,v 1.10 2006/04/18 21:39:44 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2001 Online Office Berlin. All rights reserved.
@@ -18,7 +18,7 @@ package WE::Util::Support;
 
 use strict;
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.10 $ =~ /(\d+)\.(\d+)/);
 
 =head1 NAME
 
@@ -326,7 +326,18 @@ sub check_integrity {
     my @child_parent_mismatches;
     my @doc_object_without_content;
 
-    my %referenced = ($self->root_object->Id => []);
+    my $root_object_missing = 0;
+
+    my %referenced;
+
+    my $root_obj = $self->root_object;
+    if (!$root_obj) {
+	# This is fatal, don't do any other checks
+	$root_object_missing = 1;
+	goto RETURN;
+    } else {
+	$referenced{$root_obj->Id} = [];
+    }
 
     $self->connect_if_necessary(sub {
 	 my @keys = grep { !/^_/ } keys %{ $self->{DB} };
@@ -391,6 +402,7 @@ sub check_integrity {
 	 }
     });
 
+ RETURN:
     @not_existing_children = sort {$a->[0]<=>$b->[0]} @not_existing_children;
     @not_existing_parents  = sort {$a->[0]<=>$b->[0]} @not_existing_parents;
     @not_existing_versions = sort {$a->[0]<=>$b->[0]} @not_existing_versions;
@@ -405,6 +417,7 @@ sub check_integrity {
 	    "not_referenced"             => \@not_referenced,
 	    "child_parent_mismatches"    => \@child_parent_mismatches,
 	    "doc_object_without_content" => \@doc_object_without_content,
+	    "root_object_missing"	 => $root_object_missing,
 	  }, 'WE::DB::Obj::Fsck';
 }
 
@@ -427,7 +440,14 @@ Be verbose if set to a true value.
 sub repair_database {
     my($self, $errors, %args) = @_;
     my $v = 1 if $args{-verbose};
+    my $root_object_id = $args{-rootobjectid};
     $self->connect_if_necessary(sub {
+	if ($errors->{root_object_missing}) {
+	    if (!defined $root_object_id) {
+		die "rootobjectid not specified";
+	    }
+	    $self->{DB}{'_root_object'} = $root_object_id;
+	}
         foreach my $id (@{ $errors->{"not_referenced"} }) {
 	    warn "Remove object $id from database\n" if $v;
 	    delete $self->{DB}{$id};
@@ -456,8 +476,8 @@ sub repair_database {
 		delete $self->{DB}{$id};
 	    }
 	}
-	warn "Cannot repair undef_values" if @{ $errors->{"undef_values"} };
-	warn "Cannot repair broken_values" if @{ $errors->{"broken_values"} };
+	warn "Cannot repair undef_values\n" if @{ $errors->{"undef_values"} };
+	warn "Cannot repair broken_values\n" if @{ $errors->{"broken_values"} };
     });
 }
 
@@ -547,11 +567,19 @@ package WE::DB::Fsck;
 sub has_errors {
     my $errors = shift;
     foreach (values %$errors) {
-	if (@$_) {
+	if (ref $_ eq 'ARRAY' && @$_) {
 	    return 1;
 	}
     }
+    if ($errors->has_fatal_errors) {
+	return 1;
+    }
     0;
+}
+
+sub has_fatal_errors {
+    my $errors = shift;
+    return $errors->{root_object_missing} ? 1 : 0;
 }
 
 package WE::DB::Obj::Fsck;

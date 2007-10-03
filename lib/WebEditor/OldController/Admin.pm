@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Admin.pm,v 1.30 2004/12/23 17:54:02 eserte Exp $
+# $Id: Admin.pm,v 1.31 2005/11/04 00:32:48 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2003,2004 Slaven Rezic. All rights reserved.
@@ -16,7 +16,7 @@ package WebEditor::OldController::Admin;
 
 use strict;
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.30 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.31 $ =~ /(\d+)\.(\d+)/);
 
 package WebEditor::OldController;
 
@@ -184,6 +184,7 @@ sub linkchecker {
 	(-url => \@urls,
 #	 -follow => [$c->paths->absoluteurl],
 	 -restrict => [$c->paths->absoluteurl],
+#	 -ignore => ['\.php$'],
 	);
 #    print $lc->check_html;
     require Template;

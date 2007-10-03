@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Htdig.pm,v 1.16 2004/04/15 23:31:24 eserte Exp $
+# $Id: Htdig.pm,v 1.18 2006/12/01 10:12:56 cmuellermeta Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2002 Slaven Rezic. All rights reserved.
@@ -16,7 +16,7 @@ package WE_Frontend::Indexer::Htdig;
 
 use strict;
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.16 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.18 $ =~ /(\d+)\.(\d+)/);
 
 ## XXX Maybe some day ...
 # sub new {
@@ -259,6 +259,13 @@ sub generate_conf {
     if (defined $lang) {
 	$long_lang = {en => "english",
 		      de => "german",
+		      it => "italian",
+		      fr => "french",
+		      kr => "korean",
+		      ru => "russian",
+		      es => "spanish",
+		      pt => "portugese",
+		      hu => "hungarian",
 		     }->{$lang};
 	warn "long_lang is not defined for $lang"
 	    if !defined $long_lang;

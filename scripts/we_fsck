@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: we_fsck,v 1.6 2004/04/05 20:23:17 eserte Exp $
+# $Id: we_fsck,v 1.7 2006/04/18 21:39:11 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2002,2004 Slaven Rezic. All rights reserved.
@@ -53,11 +53,36 @@ my $has_errors = $errors->has_errors;
 
 my $has_contentdb_errors;
 my $contentdb_errors;
-if (!$contentdb) {
+if (!$contentdb || $errors->has_fatal_errors) {
     warn "Can't check ContentDB contents\n";
 } else {
     $contentdb_errors = $contentdb->check_integrity($objdb);
     $has_contentdb_errors = $contentdb_errors->has_errors;
+}
+
+my %repair_db_args;
+if ($errors->{root_object_missing}) {
+    my %seen;
+    while(my($id,$val) = each %{ $objdb->{DB} }) {
+	$seen{$id}++;
+    }
+    if (exists $seen{0}) {
+	$repair_db_args{-rootobjectid} = 0;
+	print STDERR "Use object id <0> for repairing root object...\n";
+    } else {
+	while() {
+	    print STDERR "Root object is missing, please specify one of the following ids: " .
+		join(" ", sort { $a <=> $b } keys %seen) . "\n> ";
+	    my $ans = scalar <STDIN>;
+	    chomp $ans;
+	    if (!exists $seen{$ans}) {
+		print STDERR "Answer not valid, please retry or CTRL-C.\n";
+	    } else {
+		$repair_db_args{-rootobjectid} = $ans;
+		last;
+	    }
+	}
+    }
 }
 
 require Data::Dumper;
@@ -73,7 +98,7 @@ if (!$show) {
 	    $yn = scalar <STDIN>;
 	}
 	if ($yn =~ /^y/i) {
-	    $objdb->repair_database($errors, -verbose => $v);
+	    $objdb->repair_database($errors, -verbose => $v, %repair_db_args);
 	} else {
 	    warn "Aborting...\n";
 	}

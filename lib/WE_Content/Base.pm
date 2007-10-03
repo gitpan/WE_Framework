@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: Base.pm,v 1.13 2004/04/13 21:48:50 eserte Exp $
+# $Id: Base.pm,v 1.14 2005/05/13 09:53:13 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2001 Online Office Berlin. All rights reserved.
@@ -18,7 +18,7 @@ package WE_Content::Base;
 
 use strict;
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.13 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.14 $ =~ /(\d+)\.(\d+)/);
 
 sub new {
     my($self, %args) = @_;
@@ -68,7 +68,7 @@ sub get_string {
 
 sub guess_class {
     my($self, $buf) = @_;
-    if ($buf =~ /^--- \#YAML:/) {
+    if ($buf =~ /^---( \#YAML:)?/) {
 	require WE_Content::YAML;
 	'WE_Content::YAML';
     } elsif ($buf =~ /^<\?xml/) {

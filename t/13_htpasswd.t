@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: 13_htpasswd.t,v 1.4 2004/12/03 15:51:15 eserte Exp $
+# $Id: 13_htpasswd.t,v 1.5 2005/12/12 12:28:16 eserte Exp $
 # Author: Slaven Rezic
 #
 
@@ -40,7 +40,7 @@ sub file_name_is_absolute {
 }
 
 BEGIN {
-    if (!WE::Util::Htpasswd::htpasswd_exe()) {
+    if (!eval { WE::Util::Htpasswd::htpasswd_exe() }) {
 	print "1..0 # no htpasswd in the PATH of this system\n";
 	exit;
     }

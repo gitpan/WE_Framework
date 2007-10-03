@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: ComplexUser.pm,v 2.20 2005/02/16 22:45:49 eserte Exp $
+# $Id: ComplexUser.pm,v 2.21 2005/05/10 11:13:22 eserte Exp $
 # Author: Olaf Mätzner, Slaven Rezic
 #
 # Copyright (C) 2001 Online Office Berlin. All rights reserved.
@@ -22,7 +22,7 @@ __PACKAGE__->mk_accessors(qw(DB CryptMode InvalidChars InvalidGroupChars
 
 use strict;
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%02d", q$Revision: 2.20 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 2.21 $ =~ /(\d+)\.(\d+)/);
 
 use MLDBM;
 use Fcntl;
@@ -893,8 +893,6 @@ Return 1 if I<$username> is in the named I<$group>.
 =item $udb->get_groups($username)
 
 Return an array of the I<$username>'s groups.
-
-Return 1 if I<$username> is in the named I<$group>.
 
 =item $udb->add_group($username,$group)
 

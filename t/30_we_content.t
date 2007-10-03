@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: 30_we_content.t,v 1.16 2005/01/30 08:29:31 eserte Exp $
+# $Id: 30_we_content.t,v 1.19 2007/10/03 08:29:33 eserte Exp $
 # Author: Slaven Rezic
 #
 
@@ -153,13 +153,13 @@ SKIP: {
     require WE_Content::YAML;
     my $yaml_clone = $clone->clone('WE_Content::YAML');
     ok($yaml_clone->isa('WE_Content::YAML'), "a WE_Content::YAML object");
-    ok($yaml_clone->isa('WE_Content::Base'));
+    ok($yaml_clone->isa('WE_Content::Base'), "expected base class");
     my $yaml = $yaml_clone->serialize;
-    like($yaml, qr/^--- \#YAML/);
+    like($yaml, qr/^---( \#YAML)?/, "Has a YAML header");
     my $yaml_new = WE_Content::YAML->new(-string => $yaml);
-    ok($yaml_new->isa('WE_Content::YAML'));
+    ok($yaml_new->isa('WE_Content::YAML'), "still a WE_Content::YAML object");
     my $yaml2 = $yaml_new->serialize;
-    is($yaml, $yaml2);
+    is($yaml, $yaml2, "both YAML objects are the same");
     $yaml_new = WE_Content::Base->new(-string => $yaml);
     ok($yaml_new->isa('WE_Content::YAML'));
     $yaml2 = $yaml_new->serialize;
@@ -168,7 +168,8 @@ SKIP: {
 
 for my $modulebase (qw(XML XMLText)) {
  SKIP: {
-TODO: { local $TODO = "Some tests fail with XMLText";
+	skip("Some tests fail with XMLText TODO", $xml_tests)
+	    if $modulebase eq 'XMLText';
 	my $module = "WE_Content::" . $modulebase;
 	my @args_serialize;
 	my @args_new;
@@ -254,7 +255,6 @@ TODO: { local $TODO = "Some tests fail with XMLText";
 	    is($@, "");
 	    ok(XML::Dumper::xml_compare($xml3, $xml4), "Compare XML round-trip result with iso-8859-1 encoding");
 	}
-}
     }
 
 }

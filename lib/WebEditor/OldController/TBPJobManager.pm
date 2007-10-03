@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: TBPJobManager.pm,v 1.2 2004/06/10 12:41:50 eserte Exp $
+# $Id: TBPJobManager.pm,v 1.3 2005/03/22 09:59:50 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2004 Slaven Rezic. All rights reserved.
@@ -16,7 +16,7 @@ package WebEditor::OldController::TBPJobManager;
 
 use strict;
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
 
 use base qw(Class::Accessor);
 __PACKAGE__->mk_accessors(qw(AJM Controller DBFile DB));
@@ -30,6 +30,7 @@ use WE::Util::AtJobManager;
 =head1 NAME
 
 WebEditor::OldController::TBPJobManager - manager for time based publishing jobs
+
 =cut
 
 sub new {

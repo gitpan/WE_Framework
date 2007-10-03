@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: LinkChecker.pm,v 1.7 2003/12/16 15:21:23 eserte Exp $
+# $Id: LinkChecker.pm,v 1.8 2005/11/04 00:32:48 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2002 Online Office Berlin. All rights reserved.
@@ -22,10 +22,10 @@ use LWP::UserAgent;
 
 use strict;
 use vars qw($VERSION $VERBOSE);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.7 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.8 $ =~ /(\d+)\.(\d+)/);
 
 use base qw(Class::Accessor);
-__PACKAGE__->mk_accessors(qw(Restrict Follow Url Pending SeenOk SeenError Ua));
+__PACKAGE__->mk_accessors(qw(Restrict Follow Ignore Url Pending SeenOk SeenError Ua));
 
 sub new {
     my($class, %args) = @_;
@@ -34,6 +34,7 @@ sub new {
 
     $self->Follow(undef);
     $self->Restrict(undef);
+    $self->Ignore(undef);
     while(my($k,$v) = each %args) {
 	$self->{ucfirst(substr($k,1))} = $v;
     }
@@ -192,6 +193,10 @@ sub check {
 	    warn "$new_url is restricted\n" if $VERBOSE;
 	    next;
 	}
+	if ($self->_ignored($new_url)) {
+	    warn "$new_url is ignored\n" if $VERBOSE;
+	    next;
+	}
 	my $failure = $self->_check($new_url);
 	if ($failure) {
 	    $fail_urls{$caller}->{$new_url}++;
@@ -259,6 +264,15 @@ sub _restricted {
 	return 0 if $url =~ /$restr/;
     }
     1;
+}
+
+sub _ignored {
+    my($self, $url) = @_;
+    return 0 if !$self->Ignore;
+    foreach my $ignore (@{ $self->Ignore }) {
+	return 1 if $url =~ /$ignore/;
+    }
+    0;
 }
 
 sub _nofollow {

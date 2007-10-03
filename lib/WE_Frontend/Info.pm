@@ -2,7 +2,7 @@ package WE_Frontend::Info;
 
 use strict;
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.33 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.34 $ =~ /(\d+)\.(\d+)/);
 
 ######################################################################
 package WEsiteinfo::Paths;
@@ -16,7 +16,7 @@ __PACKAGE__->mk_accessors(qw(scheme servername serverport absoluteurl
 			     liverooturl liverootdir livecgiurl livecgidir
 			     we_templatebase site_we_templatebase
 			     site_templatebase we_htmldir we_htmlurl
-			     we_datadir photodir
+			     we_datadir photodir downloaddir
 			     pubhtmldir prototypedir
 			     htuser htpassword
 			    ));

@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: FromString.pm,v 1.3 2003/01/16 14:29:10 eserte Exp $
+# $Id: FromString.pm,v 1.4 2007/10/03 10:24:50 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2001 Onlineoffice. All rights reserved.
@@ -42,10 +42,26 @@ GenericTree::FromString - creating GenericTrees from a string representation
 
 use strict;
 use vars qw($VERSION @ISA);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.4 $ =~ /(\d+)\.(\d+)/);
 # use base does not work for 5.005?
 use WE::Util::GenericTree;
 push @ISA, 'WE::Util::GenericTree';
+
+# from: http://groups.google.com/group/perl.perl5.porters/browse_frm/thread/6f5edc58ec8ee045
+sub rebless ($$){
+     my ($self, $newclass) = @_;
+     if ($] < 5.009) {
+	 bless $self, $newclass;
+	 return $self;
+     }
+     my $oldclass = ref $self;
+     require Hash::Util; # caveat; prototype does not work because of this
+     &Hash::Util::unlock_hash(\%$self);
+     bless $self, $newclass;
+     no strict 'refs';
+     &Hash::Util::lock_keys(\%$self, keys %{$oldclass.'::FIELDS'});
+     return $self;
+}
 
 sub new {
     my $proto = shift;
@@ -76,7 +92,7 @@ sub new {
 	}
     }
 
-    bless $root, $class;
+    rebless $root, $class;
 }
 
 1;

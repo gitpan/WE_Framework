@@ -2,10 +2,10 @@
 # -*- perl -*-
 
 #
-# $Id: we_user,v 1.17 2005/02/22 22:07:13 eserte Exp $
+# $Id: we_user,v 1.18 2005/05/10 12:02:04 eserte Exp $
 # Author: Slaven Rezic
 #
-# Copyright (C) 2002,2004 Slaven Rezic.
+# Copyright (C) 2002,2004,2005 Slaven Rezic.
 # This is free software; you can redistribute it and/or modify it under the
 # terms of the GNU General Public License, see the file COPYING.
 #
@@ -17,6 +17,9 @@ use strict;
 
 use Getopt::Long;
 
+use vars qw($VERSION);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.18 $ =~ /(\d+)\.(\d+)/);
+
 my @args;
 my $class = "WE::DB::ComplexUser";
 my $contained_in;
@@ -25,6 +28,7 @@ my $rootdir = ".";
 my $userdb_file;
 my $onlineuserdb_file;
 my $need_rw = 1;
+my $show_version;
 my @inc;
 
 use WE::DB::Info;
@@ -45,8 +49,14 @@ GetOptions("class=s" => \$class,
 	   "userdb=s" => \$userdb_file,
 	   "onlineuserdb=s" => \$onlineuserdb_file,
 	   'inc=s@' => \@inc,
+	   'version' => \$show_version,
 	  );
 Getopt::Long::config('no_pass_through');
+
+if ($show_version) {
+    print "$0 version $VERSION\n";
+    exit 0;
+}
 
 if (@inc) {
     unshift @INC, @inc;
@@ -65,7 +75,13 @@ if ($command =~ /^-/) {
 		    'g|groups=s' => \$cmdarg{GroupString},
 		    'email=s' => \$cmdarg{Email},
 		   )) {
-	usage("wrong arguments for add");
+	usage("wrong arguments for $command");
+    }
+} elsif ($command =~ /^(add-group|add-group-if-not-exists)$/) {
+    if (!GetOptions("g|group=s" => \$cmdarg{Group},
+		    "desc|description=s" => \$cmdarg{Description},
+		   )) {
+	usage("wrong arguments for $command");
     }
 } elsif ($command =~ /^user-exists$/) {
     if (!GetOptions('u|user=s' => \$cmdarg{User},
@@ -173,6 +189,24 @@ if ($command eq 'show') {
     }
 } elsif ($command eq 'add') {
     add_user();
+
+} elsif ($command eq 'add-group-if-not-exists' ||
+	 $command eq 'add-group') {
+    if (!defined $cmdarg{Group}) {
+	die "Groupname necessary!";
+    }
+    my $group_obj = $db->GroupObjClass->new;
+    $group_obj->Groupname($cmdarg{Group});
+    if (defined $cmdarg{Description}) {
+	$group_obj->Description($cmdarg{Description});
+    }
+    my $ret = $db->add_group_definition($group_obj);
+    if ($command eq 'add-group-if-not-exists' &&
+	$ret eq $db->ERROR_GROUP_EXISTS) {
+	# ignore
+    } elsif ($ret ne $db->ERROR_OK) {
+	die "Cannot add group $cmdarg{Group}, error code: $ret";
+    }
 
 } elsif ($command eq 'user-exists') {
     if ($db->user_exists($cmdarg{User})) {

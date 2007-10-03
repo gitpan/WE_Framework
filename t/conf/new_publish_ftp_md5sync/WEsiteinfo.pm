@@ -20,7 +20,7 @@ package WEsiteinfo::Paths;
 use base qw(Class::Accessor);
 __PACKAGE__->mk_accessors(qw(rooturl rootdir cgiurl cgidir we_templatebase
 			     site_templatebase we_htmlbase we_database photodir
-			     pubhtmldir prototypedir));
+			     downloaddir pubhtmldir prototypedir));
 $c = bless {}, __PACKAGE__;
 $c->pubhtmldir("$FindBin::RealBin/testhtml");
 $c->cgidir("$FindBin::RealBin/testhtml/cgi-bin");

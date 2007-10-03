@@ -2,13 +2,12 @@
 # -*- perl -*-
 
 #
-# $Id: 98_oldcontroller.t,v 1.4 2005/02/21 21:01:33 eserte Exp $
+# $Id: 98_oldcontroller.t,v 1.7 2005/05/12 19:34:34 eserte Exp $
 # Author: Slaven Rezic
 #
 
 use strict;
 use FindBin;
-use WebEditor::OldController;
 
 BEGIN {
     if (!eval q{
@@ -16,10 +15,12 @@ BEGIN {
 	use Data::JavaScript;
 	1;
     }) {
-	print "ok 1 # skip tests only work with installed Test::More and Data::JavaScript modules\n";
+	print "1..0 # skip tests only work with installed Test::More and Data::JavaScript modules\n";
 	exit;
     }
 }
+
+use WebEditor::OldController;
 
 my $oc = WebEditor::OldController->new;
 

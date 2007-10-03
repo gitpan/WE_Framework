@@ -216,13 +216,13 @@ lib/WebEditor/OldFeatures/IndexerLive.pm
 scripts/we_group
 lib/WebEditor/OldFeatures/AdminGroup.pm
 lib/WebEditor/OldFeatures/WWWAuth.pm
-META.yml                                 Module meta-data (added by MakeMaker)
 lib/WE/Util/AtJobManager.pm
 t/98_oldcontroller.t
 t/93_htmlnum_filter.t
 lib/WE/Util/Escape.pm
 lib/WE_Frontend/Publish/Tgz.pm
 lib/WE/DB/ComplexUser/AuthPOP3.pm
+lib/WE/DB/ComplexUser/AuthPOP3S.pm
 lib/WebEditor/OldController/TBPJobManager.pm
 lib/WebEditor/OldFeatures/HTMLFilterHack.pm
 t/11_pop3auth.t

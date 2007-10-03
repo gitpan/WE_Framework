@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: OldController.pm,v 1.84 2005/02/23 13:13:59 eserte Exp $
+# $Id: OldController.pm,v 1.94 2006/02/16 12:32:34 cmuellermeta Exp $
 #
 # WebEditor::OldController used to be we_redisys.cgi in the old web.editor
 # system.
@@ -23,7 +23,7 @@ package WebEditor::OldController;
 
 use strict;
 use vars qw($VERSION);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.84 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.94 $ =~ /(\d+)\.(\d+)/);
 
 use base qw(Class::Accessor);
 __PACKAGE__->mk_accessors(qw(R C Class FE_Class HeaderPrinted
@@ -33,6 +33,8 @@ __PACKAGE__->mk_accessors(qw(R C Class FE_Class HeaderPrinted
 			     CustomUserDB
 			    ));
 use CGI qw(:standard);
+use Data::JavaScript {JS => 1.3}; # for unicode support
+Data::JavaScript->VERSION('1.10');
 
 use WE::Util::LangString qw(langstring new_langstring set_langstring);
 
@@ -43,20 +45,20 @@ BEGIN {
 	*warnings::unimport = sub { };
     }
 }
-{
-    ## XXX This should go to the original Data::JavaScript!!!
-    use Data::JavaScript;
-    package Data::JavaScript;
-no warnings 'redefine';
-my $unicoderange = '\x{0100}-\x{fffd}';
-if ($] < 5.006) { $unicoderange = "" }
-sub quotemeta {
-	my $text = shift;
-	$text =~ s/([^\x20\x21\x23-\x26\x28-\x7E$unicoderange])/sprintf("\\%03o", ord($1))/geo;
-	$text =~ s/([$unicoderange])/sprintf("\\u%04x", ord($1))/geo;
-	$text;
-}
-}
+# {
+#     ## XXX This should go to the original Data::JavaScript!!!
+#     use Data::JavaScript;
+#     package Data::JavaScript;
+# no warnings 'redefine';
+# my $unicoderange = '\x{0100}-\x{fffd}';
+# if ($] < 5.006) { $unicoderange = "" }
+# sub quotemeta {
+# 	my $text = shift;
+# 	$text =~ s/([^\x20\x21\x23-\x26\x28-\x7E$unicoderange])/sprintf("\\%03o", ord($1))/geo;
+# 	$text =~ s/([$unicoderange])/sprintf("\\u%04x", ord($1))/geo;
+# 	$text;
+# }
+# }
 
 {
     if (eval q{ use CGI::Util; 1 }) {
@@ -338,6 +340,7 @@ sub dispatch {
     my $goto = $self->Goto;
     my $c    = $self->C;
     my $subs = $self->subs;
+    my $pageid = param("pageid");
 
     {
 	if (!defined $goto) {
@@ -367,7 +370,7 @@ sub dispatch {
 	    ($method, $class) = @$method;
 	    eval qq{ require $class }; die $@ if $@;
 	}
-	warn "goto: $goto (method $method)\n" if $c->debug;
+	warn "goto: $goto (method $method $pageid)\n" if $c->debug;
 	$self->$method();
     }
 
@@ -1027,7 +1030,8 @@ EOF
 	if (-e "$langdir/$root_id$ext") {
 	    print $logfh (_html("($lang: index$ext => $root_id$ext) "));
 	    unlink "$langdir/index$ext";
-	    symlink("$root_id$ext", "$langdir/index$ext");
+	    symlink("$root_id$ext", "$langdir/index$ext")
+		or warn "Can't symlink $root_id$ext -> $langdir/index$ext: $!";
 	}
     }
 
@@ -1248,7 +1252,7 @@ sub makefolderpage {
 		    unlink $linkfile;
 		    if ($active) {
 			symlink $oldfile, $linkfile
-			    or warn "Can't symllink $docid => $mainid";
+			    or warn "Can't symllink $oldfile -> $linkfile: $!";
 			print $logfh (_html(" ($lang: " . $self->fmt_msg("msg_link_to", $oldfile) . ") "));
 		    }
 		} else {
@@ -1256,7 +1260,7 @@ sub makefolderpage {
 		}
 		push @ret, $mainid;
 	    }
-	    for my $name ($root->NameDB->get_names($docid)) {
+	    for my $name ($root->NameDB->get_names($docid),$root->NameDB->get_names($mainid)) {
 		my $oldfile  = $docid.$ext;
 		my $linkfile = $langdir."/".$name.$ext;
 		local $^W = undef;
@@ -1264,7 +1268,7 @@ sub makefolderpage {
 		    unlink $linkfile;
 		    if ($active) {
 			symlink $oldfile, $linkfile
-			    or warn "Can't symllink $name => $docid";
+			    or warn "Can't symllink $oldfile -> $linkfile: $!";
 			print $logfh (_html(" ($lang: " . $self->fmt_msg("msg_link_to", $oldfile) . ") "));
 		    }
 		} else {
@@ -1718,6 +1722,28 @@ sub folderpublish {
 	    push @base_file_names, "html/$lang/$base$ext";
 	}
     }
+
+    #also publish _p files if available
+    for my $base (@unlang_base_file_names) {
+	for my $lang (@{ $c->project->sitelanguages }) {
+	    push @base_file_names, "html/$lang/$base"."_p"."$ext"
+	     if -r $c->paths->pubhtmldir . "/html/$lang/$base"."_p"."$ext";
+	}
+     }
+
+    # also stage download and photo dirs
+    require File::Find;
+    local $File::Find::find   = $File::Find::find;
+    local $File::Find::name   = $File::Find::name;
+
+    push my @search_base, $c->paths->photodir;
+    push @search_base, $c->paths->downloaddir;
+
+    File::Find::find({follow_fast => 1, 
+		      follow_skip => 2, 
+  			wanted => sub {
+         push @base_file_names, substr($File::Find::name,length($c->paths->rootdir)+1);
+     }},@search_base);
 
     my $ret = WE_Frontend::Publish::Rsync::publish_files
 	($self->FE, \@base_file_names, -n => 0, -verbose => 1);
@@ -2208,7 +2234,7 @@ sub showeditor_any_rename {
 
 # object method
 sub _allowed_image_extensions {
-    qw(gif png jpg jpeg jpe tiff tif);
+    qw(gif png jpg jpeg jpe tiff tif swf);
 }
 
 sub _check_allowed_image_extensions {
@@ -2680,7 +2706,7 @@ sub error {
 	$context = "Context:<br><table border=0 cellpadding=0 cellspacing=0>" . join("\n", @context) . "</table>";
     };
 
-    my $version = '$Id: OldController.pm,v 1.84 2005/02/23 13:13:59 eserte Exp $';
+    my $version = '$Id: OldController.pm,v 1.94 2006/02/16 12:32:34 cmuellermeta Exp $';
 
     my $stylesheet;
     eval {
@@ -3044,3 +3070,20 @@ sub we_notify {
 1;
 
 __END__
+
+=head1 NAME
+
+WebEditor::OldController - the heart of the web.editor system
+
+=head1 SYNOPSIS
+
+Normally only called from C<we_redisys.cgi>.
+
+=head1 AUTHOR
+
+Original author: oleberlin@users.sourceforge.net
+
+Modified into a OO module and current maintainer:
+eserte@users.sourceforge.net
+
+=cut

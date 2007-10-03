@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: 00_we_framework.t,v 1.16 2005/02/02 22:13:06 eserte Exp $
+# $Id: 00_we_framework.t,v 1.20 2007/10/03 10:11:25 eserte Exp $
 # Author: Slaven Rezic
 #
 
@@ -74,7 +74,7 @@ for my $mod (@mods) {
 	skip "Data::JavaScript not available, needed for $mod", $tests_per_loop
 	    if $mod =~ /^( WebEditor::OldController
 			 | WebEditor::OldFeatures::TeaserLink
-			 )$/x && !eval { require Data::JavaScript };
+			 )$/x && !eval { require Data::JavaScript; Data::JavaScript->VERSION(1.10) };
 	skip "HyperWave modules not available, needed for $mod", $tests_per_loop
 	    if $mod =~ /^( WE_Sample::HW
                          | WE::DB::HWObj
@@ -152,12 +152,15 @@ for my $script (@scripts) {
 	skip "YAML not available", $tests_per_script_loop
 	    if $base =~ /^(we_dump|we_user)$/ && !eval { require YAML };
 	skip "Term::ReadKey", $tests_per_script_loop
-	    if $base eq 'we_shell' && !eval { require YAML };
+	    if $base eq 'we_shell' && !eval { require Term::ReadKey };
+	skip "HTML::Entities", $tests_per_script_loop
+	    if $base eq 'we_export_content' && !eval { require HTML::Entities };
 
-	my $cmd = "$^X -c $script > " . devnull . " 2>&1";
+	my $cmd = "$^X -Mblib=.. -c $script > " . devnull . " 2>&1";
 	#warn $cmd;
 	system $cmd;
-	is($?, 0, "Script $script");
+	is($?, 0, "Script $script")
+	    or diag "Command line <$cmd> failed";
     }
 }
 

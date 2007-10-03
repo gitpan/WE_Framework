@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: 22_permissions.t,v 1.5 2004/10/11 22:10:25 eserte Exp $
+# $Id: 22_permissions.t,v 1.6 2005/04/05 22:05:17 eserte Exp $
 # Author: Slaven Rezic
 #
 
@@ -23,7 +23,7 @@ BEGIN {
     }
 }
 
-BEGIN { plan tests => 78 }
+BEGIN { plan tests => 85 }
 
 my $p0 = WE::Util::Permissions->new(-string => <<EOF);
 # Nobody is allowed to do anything
@@ -381,6 +381,33 @@ EOF
     is($p->get_directive("primarylang"), "de", "primarylang directive");
 }
 
+{
+    my $p = WE::Util::Permissions->new(-string => <<EOF);
+! match: glob
+group Produkte
+ process new-doc new-image copy-doc move-doc
+ page /Products*
+  process edit new-doc release publish
+EOF
+    for my $page ("/Products",
+                  "/ProductsA1",
+                  "/Products A1",
+                  "/Products/A1",
+                  "/Products/A1/bla",
+                  "/Products/Neuheiten",
+		  "/Products/Gruppe A/Produkt A1",
+                 ) {
+        ok($p->is_allowed(-user    => "dummy",
+		          -group   => "Produkte",
+		          -process => "edit",
+		          -page    => $page),
+           "Bug report by ckasmeridis (page: $page)",
+        );
+    }
+}
+
+######################################################################
+# Cleanup
 END {
     unlink "$tmp/permissions_test"
 	if defined $tmp && -e "$tmp/permissions_test";

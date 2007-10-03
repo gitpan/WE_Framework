@@ -21,7 +21,7 @@ use base qw(Class::Accessor);
 __PACKAGE__->mk_accessors(qw(absoluteurl
 			     rooturl rootdir cgiurl cgidir we_templatebase
 			     site_templatebase we_htmlbase we_database photodir
-			     pubhtmldir prototypedir));
+			     downloaddir pubhtmldir prototypedir));
 $c = bless {}, __PACKAGE__;
 $c->absoluteurl("http://www:80/~eserte/webeditor/wwwroot");
 $c->rooturl("/~eserte/webeditor/wwwroot");

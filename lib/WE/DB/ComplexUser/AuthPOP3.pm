@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 #
-# $Id: AuthPOP3.pm,v 1.2 2005/02/03 00:06:28 eserte Exp $
+# $Id: AuthPOP3.pm,v 1.3 2005/05/11 09:28:27 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2004 Slaven Rezic.
@@ -17,7 +17,7 @@ package WE::DB::ComplexUser::AuthPOP3;
 
 use strict;
 use vars qw($VERSION $DEBUG);
-$VERSION = sprintf("%d.%02d", q$Revision: 1.2 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.3 $ =~ /(\d+)\.(\d+)/);
 
 use mixin::with 'WE::DB::ComplexUser';
 
@@ -57,6 +57,6 @@ Slaven Rezic
 
 =head1 SEE ALSO
 
-L<WE::DB::ComplexUser>.
+L<WE::DB::ComplexUser>, L<Net::POP3>.
 
 =cut
