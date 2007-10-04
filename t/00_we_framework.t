@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: 00_we_framework.t,v 1.20 2007/10/03 10:11:25 eserte Exp $
+# $Id: 00_we_framework.t,v 1.21 2007/10/04 19:27:17 eserte Exp $
 # Author: Slaven Rezic
 #
 
@@ -150,7 +150,7 @@ for my $script (@scripts) {
 	skip "XML::DOM not available", $tests_per_script_loop
 	    if $base eq 'we_import_hwx' && !eval { require XML::DOM };
 	skip "YAML not available", $tests_per_script_loop
-	    if $base =~ /^(we_dump|we_user)$/ && !eval { require YAML };
+	    if $base =~ /^(we_dump|we_user|we_shell)$/ && !eval { require YAML };
 	skip "Term::ReadKey", $tests_per_script_loop
 	    if $base eq 'we_shell' && !eval { require Term::ReadKey };
 	skip "HTML::Entities", $tests_per_script_loop

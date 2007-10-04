@@ -2,7 +2,7 @@
 # -*- perl -*-
 
 #
-# $Id: Makefile.PL,v 1.59 2007/10/03 10:13:06 eserte Exp $
+# $Id: Makefile.PL,v 1.61 2007/10/04 19:25:41 eserte Exp $
 # Author: Slaven Rezic
 #
 # Copyright (C) 2001 Onlineoffice. All rights reserved.
@@ -29,6 +29,7 @@ BEGIN {
       'DB_File'	  => 0,
       'DB_File::Lock'	  => 0,
       'MLDBM'		  => 0,
+      'Storable'         => 0,
       # This is not exactly a WE_Framework requirement, but
       # rather a requirement of a recent File::Temp, which
       # needs is needed by Template-Toolkit, which is used
@@ -90,7 +91,6 @@ BEGIN {
       'Pod::Coverage'    => 0, # also
       'Pod::POM'         => 0, # for the documentation
       'File::NCopy'      => 0, # for content im/export test
-      'Storable'         => 0, # alternative MLDBM serializer
       'Term::ReadKey'	 => 0, # for we_shell
      ],
 
@@ -157,7 +157,7 @@ if (0) {
 WriteMakefile
   (
    'NAME'	   => 'WE_Framework',
-   'VERSION'       => '0.097_02',
+   'VERSION'       => '0.097_03',
    'EXE_FILES'     => [qw|
 		          scripts/we_content_upgrade
 		          scripts/we_create_folder_tree
@@ -185,6 +185,10 @@ WriteMakefile
    'AUTHOR'        => 'Slaven Rezic (slaven@rezic.de)',
    'NO_META'       => 1,
   );
+
+if (!is_in_path("rsync")) {
+    print STDERR "Note that some optional parts of the framework need 'rsync' installed.\n";
+}
 
 # ignore autoinstall.pl
 sub MY::libscan {
